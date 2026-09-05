@@ -173,7 +173,7 @@ if __name__ == "__main__":
         app_path = pathlib.Path(temp_dir) / f"{APP_NAME}-{args.version}.app"
         if create_app(app_path, fptn_client_cli, fptn_client_gui, args.version):
             if create_pkg(app_path, args.version):
-                print(f"Package created successfully")
+                print("Package created successfully")
             else:
                 print("Failed to create package.")
                 sys.exit(1)

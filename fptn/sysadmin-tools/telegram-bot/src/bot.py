@@ -12,7 +12,7 @@ from pathlib import Path
 import brotli
 
 from loguru import logger
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,

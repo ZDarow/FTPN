@@ -50,7 +50,6 @@ class FPTN(ConanFile):
         "protobuf/*:upb": False,
         "protobuf/*:with_rtti": False,
         "protobuf/*:with_zlib": False,
-        "protobuf/*:upb": False,
         "protobuf/*:debug_suffix": False,
         # --- boost options ---
         "boost/*:without_atomic": False,
@@ -303,7 +302,7 @@ class FPTN(ConanFile):
             self.options["boost"].without_process = True
 
     def export(self):
-        copy(self, f"*", src=self.recipe_folder, dst=self.export_folder)
+        copy(self, "*", src=self.recipe_folder, dst=self.export_folder)
 
     def _use_mimalloc(self):
         # mimalloc causes crashes on other platform

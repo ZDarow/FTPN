@@ -6,7 +6,6 @@ from pathlib import Path
 
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
-from conan.tools.files import copy
 from conan.tools.scm import Git
 
 

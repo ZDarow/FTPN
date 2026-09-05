@@ -13,9 +13,11 @@ read -rp "Удалить ВСЁ (VPN + админка + бот + /opt/fptn + с�
 [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Отменено"; exit 0; }
 
 # Остановить и удалить контейнеры
-cd /opt/fptn/fptn/docker-compose 2>/dev/null && docker compose down 2>/dev/null || true
-cd /opt/fptn/fptn-admin 2>/dev/null && docker compose down 2>/dev/null || true
-cd /opt/fptn/fptn/sysadmin-tools/telegram-bot 2>/dev/null && docker compose down 2>/dev/null || true
+for d in /opt/fptn/fptn/docker-compose /opt/fptn/fptn-admin /opt/fptn/fptn/sysadmin-tools/telegram-bot; do
+  if [[ -d "$d" ]]; then
+    ( cd "$d" && docker compose down ) 2>/dev/null || true
+  fi
+done
 
 # Удалить сеть
 docker network rm fptn-network 2>/dev/null || true

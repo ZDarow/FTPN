@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck shell=bash
+# shellcheck source=/etc/os-release
 # =============================================================
 #  FPTN — установка системных зависимостей
 # -------------------------------------------------------------
@@ -41,6 +43,7 @@ say "FPTN prereq installer (Ubuntu/Debian)"
 hr
 
 # ---- Определение ОС ----
+# shellcheck disable=SC1091
 . /etc/os-release
 say "ОС: ${PRETTY_NAME}"
 
