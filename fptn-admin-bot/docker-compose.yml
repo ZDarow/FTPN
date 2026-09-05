@@ -1,0 +1,32 @@
+services:
+  telegram-admin-bot:
+    build: .
+    container_name: fptn-admin-bot-telegram-admin-bot-1
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_API_TOKEN=${TELEGRAM_API_TOKEN}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - USERS_FILE=${USERS_FILE:-/etc/fptn/users.list}
+      - SERVERS_LIST_FILE=${SERVERS_LIST_FILE:-/etc/fptn/servers.json}
+      - PREMIUM_SERVERS_FILE=${PREMIUM_SERVERS_FILE:-/etc/fptn/premium_servers.json}
+      - SERVERS_CENSORED_LIST_FILE=${SERVERS_CENSORED_LIST_FILE:-/etc/fptn/servers_censored_zone.json}
+      - BLACKLIST_FILE=${BLACKLIST_FILE:-/etc/fptn/blocked_users.txt}
+      - LOG_FILE=${LOG_FILE:-/var/log/fptn_admin_bot.log}
+      - MAX_USER_SPEED_LIMIT=${MAX_USER_SPEED_LIMIT:-100}
+      - SERVICE_NAME=${SERVICE_NAME:-FPTN}
+      - ENABLE_BROTLI_COMPRESSION=${ENABLE_BROTLI_COMPRESSION:-false}
+    volumes:
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./src:/app/src
+      - fptn-server-data:/etc/fptn
+    networks:
+      - fptn-network
+
+networks:
+  fptn-network:
+    external: true
+
+volumes:
+  fptn-server-data:
+    external: true
