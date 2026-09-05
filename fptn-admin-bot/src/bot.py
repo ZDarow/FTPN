@@ -668,23 +668,18 @@ async def callback_handler(update: Update, context: CallbackContext) -> None:
             context.user_data["menu_state"] = "users"
             await query.message.reply_text("👥 Управление пользователями:", reply_markup=get_users_inline_keyboard())
         await query.answer()
-    elif data.startswith("service:"):
-        service = data.split(":", 1)[1]
-        await _send_logs(update, service)
-        await query.answer()
     elif data.startswith("logs:"):
         service = data.split(":", 1)[1]
         await _send_logs(update, service)
         await query.answer()
     elif data.startswith("restart:"):
         service = data.split(":", 1)[1]
-        await cmd_restart(update, CallbackContext.from_update(update, application=context.application))
-        await query.answer()
         try:
             subprocess.run(["docker", "restart", service], check=True)
             await query.message.reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
         except Exception as e:
             await query.message.reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_main_keyboard())
+        await query.answer()
     elif data.startswith("refresh:"):
         if data == "refresh:status":
             await cmd_status(update, context)
