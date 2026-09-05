@@ -8,14 +8,27 @@
 
 ## 🚀 Быстрый старт
 
-### Полный стек (Docker, веб-панель, Let's Encrypt)
+### Шаг 1. Установка зависимостей (чистый сервер)
+
+```bash
+# Однострочная установка: Docker, Compose, Nginx, certbot, UFW, базовые утилиты
+bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)
+# Или локально: sudo bash deploy/prereq-install.sh
+# Для C++-сборки из исходников: добавь --with-cpp
+```
+
+Что ставит: Docker Engine + Compose v2, Nginx, certbot (Let's Encrypt), UFW, jq/htop/tmux/git. Идемпотентно.
+
+### Шаг 2. Клонирование и развёртывание
+
+**Полный стек (Docker, веб-панель, Let's Encrypt):**
 ```bash
 git clone https://github.com/ZDarow/FTPN.git
 cd FTPN
 sudo bash deploy/deploy.sh
 ```
 
-### Облегчённый (systemd, без Docker, опционально панель)
+**Облегчённый (systemd, без Docker, опционально панель):**
 ```bash
 git clone https://github.com/ZDarow/FTPN.git
 cd FTPN

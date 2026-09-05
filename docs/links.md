@@ -106,6 +106,16 @@
 
 ---
 
+## 🚀 Установка на чистый сервер
+
+| Шаг | Команда | Назначение |
+|-----|---------|-----------|
+| 1. prereq-install | `bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)` | Docker, Nginx, certbot, UFW |
+| 2. clone | `git clone https://github.com/ZDarow/FTPN.git` | Клонирование |
+| 3. deploy | `sudo bash deploy/deploy.sh` или `deploy/family/deploy.sh` | Развёртывание |
+
+---
+
 ## 📡 Анти-DPI техники (для справки)
 
 | Техника | Где описана |
