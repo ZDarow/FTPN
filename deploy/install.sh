@@ -58,11 +58,17 @@ if [[ ! -f "$ENV_FILE" ]]; then
   say "Создан $ENV_FILE"
 fi
 
-# Авто-определение публичного IP
-PUBLIC_IP=$(curl -fsSL --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
-if [[ -n "$PUBLIC_IP" && "$PUBLIC_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  sed -i "s|^SERVER_EXTERNAL_IPS=.*|SERVER_EXTERNAL_IPS=$PUBLIC_IP|" "$ENV_FILE"
-  say "SERVER_EXTERNAL_IPS=$PUBLIC_IP"
+# Интерактивная настройка через TUI (whiptail/dialog/read fallback)
+if [[ -t 0 ]]; then
+  say "Запускаю TUI-настройку (Ctrl+C для пропуска)"
+  bash "$INSTALL_DIR/deploy/configure.sh" "$ENV_FILE" || warn "Настройка пропущена"
+else
+  # Неинтерактивная сессия — авто-определение IP
+  PUBLIC_IP=$(curl -fsSL --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+  if [[ -n "$PUBLIC_IP" && "$PUBLIC_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    sed -i "s|^SERVER_EXTERNAL_IPS=.*|SERVER_EXTERNAL_IPS=$PUBLIC_IP|" "$ENV_FILE"
+    say "SERVER_EXTERNAL_IPS=$PUBLIC_IP"
+  fi
 fi
 
 # ---- 4. Запускаем ----
