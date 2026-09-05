@@ -262,6 +262,11 @@ cp "$PROJECT_DIR/fptn/sysadmin-tools/telegram-bot/docker-compose.yml" \
 
 # Сборка внешней сети (чтобы контейнеры видели друг друга по именам)
 if ! docker network inspect fptn-network >/dev/null 2>&1; then
+  # Docker 25+ включает IPv6 по умолчанию, --enable-ipv6 устарел
+  docker network create \
+    --driver bridge \
+    --subnet 192.168.200.0/24  --gateway 192.168.200.1 \
+    fptn-network 2>/dev/null || \
   docker network create \
     --driver bridge --enable-ipv6 \
     --subnet dead:beef:cafe::/48 --gateway dead:beef:cafe::1 \
