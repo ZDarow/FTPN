@@ -80,7 +80,15 @@ require_input() {
       printf -v "$var_name" '%s' "$default"
       break
     fi
-    [[ -n "$value" ]] || { warn "Пустое значение недопустимо"; continue; }
+    # Пустой ввод при пустом default — ошибка (если валидатор не пропускает пустое)
+    if [[ -z "$value" ]]; then
+      # Если валидатор не задан или пропускает пустую строку — принимаем
+      if [[ -z "$validate" ]] || eval "$validate \"\"" 2>/dev/null; then
+        printf -v "$var_name" '%s' ""
+        break
+      fi
+      warn "Пустое значение недопустимо"; continue
+    fi
     if [[ -n "$validate" ]]; then
       if ! eval "$validate \"\$value\"" 2>/dev/null; then
         warn "Некорректный формат"; continue
@@ -104,9 +112,9 @@ is_domain() {
   [[ "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
 }
 
-# Принимает либо FQDN (a.b.c.tld), либо IPv4 (xxx.xxx.xxx.xxx)
+# Принимает FQDN (a.b.c.tld), IPv4 (xxx.xxx.xxx.xxx) или пустую строку
 is_host() {
-  is_domain "$1" || is_ipv4 "$1"
+  [[ -z "$1" ]] || is_domain "$1" || is_ipv4 "$1"
 }
 
 is_port() {
