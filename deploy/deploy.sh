@@ -75,7 +75,11 @@ require_input() {
     else
       read -r value || true
     fi
-    value="${value:-$default}"
+    # Если ввод пустой и default задан — берём default без валидации
+    if [[ -z "$value" && -n "$default" ]]; then
+      printf -v "$var_name" '%s' "$default"
+      break
+    fi
     [[ -n "$value" ]] || { warn "Пустое значение недопустимо"; continue; }
     if [[ -n "$validate" ]]; then
       if ! eval "$validate \"\$value\"" 2>/dev/null; then
@@ -100,6 +104,11 @@ is_domain() {
   [[ "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
 }
 
+# Принимает либо FQDN (a.b.c.tld), либо IPv4 (xxx.xxx.xxx.xxx)
+is_host() {
+  is_domain "$1" || is_ipv4 "$1"
+}
+
 is_port() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( 1 <= 10#$1 && 10#$1 <= 65535 ))
 }
@@ -115,7 +124,7 @@ if [[ -z "$AUTO_IP" ]]; then
   AUTO_IP=""
 fi
 require_input SERVER_IP    "Внешний IPv4 сервера"        "$AUTO_IP" no 'is_ipv4'
-require_input SERVER_HOST  "Домен для панели (FQDN)"      ""          no 'is_domain'
+require_input SERVER_HOST  "Домен для панели (FQDN или пусто для IP)" "" no 'is_host'
 [[ -n "$SERVER_HOST" ]] || SERVER_HOST="$SERVER_IP"
 
 say "Шаг 2/8: Порты"
