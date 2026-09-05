@@ -260,6 +260,21 @@ cp "$PROJECT_DIR/fptn-admin/docker-compose.yml" \
 cp "$PROJECT_DIR/fptn/sysadmin-tools/telegram-bot/docker-compose.yml" \
    "$COMPOSE_DIR/bot/docker-compose.yml"
 
+# Копируем исходники (compose-файлы используют build: ./)
+say "Копирую исходники для сборки образов"
+cp -r "$PROJECT_DIR/fptn-admin/backend"  "$COMPOSE_DIR/admin/backend"
+cp -r "$PROJECT_DIR/fptn-admin/frontend" "$COMPOSE_DIR/admin/frontend"
+mkdir -p "$COMPOSE_DIR/bot/telegram-bot-tmp"
+cp -r "$PROJECT_DIR/fptn/sysadmin-tools/telegram-bot/." \
+      "$COMPOSE_DIR/bot/telegram-bot-tmp/"
+mv "$COMPOSE_DIR/bot/telegram-bot-tmp/Dockerfile" \
+   "$COMPOSE_DIR/bot/Dockerfile" 2>/dev/null || true
+mv "$COMPOSE_DIR/bot/telegram-bot-tmp/src" \
+   "$COMPOSE_DIR/bot/src" 2>/dev/null || true
+mv "$COMPOSE_DIR/bot/telegram-bot-tmp/configs" \
+   "$COMPOSE_DIR/bot/configs" 2>/dev/null || true
+rm -rf "$COMPOSE_DIR/bot/telegram-bot-tmp"
+
 # Сборка внешней сети (чтобы контейнеры видели друг друга по именам)
 if ! docker network inspect fptn-network >/dev/null 2>&1; then
   # Docker 25+ включает IPv6 по умолчанию, --enable-ipv6 устарел
