@@ -67,6 +67,7 @@ conan_cache/
 .cache/
 conan.lock
 compile_commands.json
+.conan/
 
 # --- Docker / секреты / данные ---
 *.env
@@ -109,11 +110,13 @@ docs/_build/
 # --- IDE / Claude / агентские артефакты ---
 .claude/
 .kilo/
+.kilo/**
 .mcp_config*
 .continue/
 .cursor/
 .aider*
 .windsurf/
+.vscode/
 
 # --- Логи ---
 *.log

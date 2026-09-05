@@ -2,55 +2,65 @@
 
 **FPTN** (Fast Protected Tunnel Network) — VPN-технология с защитой от DPI, маскирующая трафик под легитимный HTTPS. Использует технику **Reality** и пул rolling-туннелей.
 
-> **Версия:** 0.4.4 · **Дата:** 04.09.2026
+> **Версия:** 0.4.4 · **Дата:** 04.09.2026 · **Лицензия:** MIT
 
 ---
 
-## 📦 Состав репозитория
+## 🚀 Быстрый старт
 
-```
-FTPN/
-├── fptn/                  # C++20 ядро (VPN-сервер, клиент, протокол)
-├── fptn-admin/            # Веб-панель администратора (FastAPI + React)
-├── deploy/                # Автоматическое развёртывание (полный стек, Docker)
-│   ├── deploy.sh          # 505 строк — главный инсталлятор
-│   ├── systemd/           # 6 unit-файлов
-│   └── scripts/           # 8 утилит управления
-├── deploy/family/         # Облегчённое развёртывание (systemd, без Docker)
-│   ├── deploy.sh          # 477 строк — минимальный инсталлятор
-│   ├── systemd/           # 4 unit-файла
-│   └── scripts/           # 12 CLI-утилит
-├── DOCUMENTATION.md       # Полная техническая документация (2267 строк)
-├── AUDIT.md               # Аудит качества и безопасности (414 строк)
-├── DEPENDENCIES-AUDIT.md  # Аудит зависимостей и фиксы CVE (525 строк)
-├── plan.md                # План развёртывания на VPS
-├── LICENSE                # MIT
-└── .gitignore
-```
-
----
-
-## 🚀 Быстрый старт (production)
-
-### Вариант 1: Полный стек (Docker, веб-панель, Let's Encrypt)
-
+### Полный стек (Docker, веб-панель, Let's Encrypt)
 ```bash
 git clone https://github.com/ZDarow/FTPN.git
 cd FTPN
 sudo bash deploy/deploy.sh
 ```
 
-После развёртывания доступны утилиты: `fptn-status`, `fptn-update`, `fptn-backup`, `fptn-logs`, `fptn-add-user`, `fptn-issue-token`, `fptn-setup-letsencrypt`, `fptn-swap-setup`.
-
-### Вариант 2: Облегчённый (systemd, без Docker, опционально панель)
-
+### Облегчённый (systemd, без Docker, опционально панель)
 ```bash
 git clone https://github.com/ZDarow/FTPN.git
 cd FTPN
 sudo bash deploy/family/deploy.sh
 ```
 
-После развёртывания доступны 12 утилит: `fptn-add-user`, `fptn-list`, `fptn-block`, `fptn-unblock`, `fptn-reset-speed`, `fptn-issue-token`, `fptn-show-config`, `fptn-status`, `fptn-logs`, `fptn-backup`, `fptn-update`, `fptn-swap-setup`.
+После развёртывания становятся доступны CLI-утилиты (`fptn-status`, `fptn-add-user`, `fptn-issue-token`, `fptn-backup`, `fptn-update`, …) — подробности в [docs/deploy-full.md](./docs/deploy-full.md) и [docs/deploy-family.md](./docs/deploy-family.md).
+
+---
+
+## 📂 Структура репозитория
+
+```
+FTPN/
+├── fptn/                # C++20 ядро (VPN-сервер, клиент, протокол-lib)
+├── fptn-admin/          # Веб-панель (FastAPI + React)
+│   ├── backend/         # Python 3.13, FastAPI 0.115
+│   └── frontend/        # React 18.3 + TypeScript 5 + Vite 8
+├── deploy/              # Развёртывание полного стека
+│   ├── deploy.sh        # 505 строк — главный инсталлятор
+│   ├── systemd/         # 6 unit-файлов + healthcheck timer
+│   └── scripts/         # 8 утилит управления
+├── deploy/family/       # Развёртывание облегчённого варианта
+│   ├── deploy.sh        # 477 строк — минимальный инсталлятор
+│   ├── systemd/         # 4 unit-файла
+│   └── scripts/         # 12 CLI-утилит
+├── docs/                # Вся документация (см. ниже)
+├── LICENSE              # MIT
+└── .gitignore
+```
+
+---
+
+## 📚 Документация → [docs/](./docs/)
+
+| Документ | Назначение |
+|----------|-----------|
+| **[docs/DOCUMENTATION.md](./docs/DOCUMENTATION.md)** | Полная техническая документация (2267 строк): архитектура, API, классы C++, troubleshooting. |
+| **[docs/AUDIT.md](./docs/AUDIT.md)** | Аудит качества кода, безопасности, зависимостей (6 критических проблем + план рефакторинга). |
+| **[docs/DEPENDENCIES-AUDIT.md](./docs/DEPENDENCIES-AUDIT.md)** | Применённые патчи безопасности (0 CVE в npm после фиксов, 30 → 0). |
+| **[docs/plan.md](./docs/plan.md)** | Пошаговый план развёртывания на VPS. |
+| **[docs/deploy-full.md](./docs/deploy-full.md)** | Документация полного деплоя (Docker). |
+| **[docs/deploy-family.md](./docs/deploy-family.md)** | Документация облегчённого деплоя (systemd). |
+| **[docs/links.md](./docs/links.md)** | Справочник ссылок: upstream, сайты, клиенты, инструменты. |
+| **[docs/upstream/](./docs/upstream/)** | Оригинальная HTML-документация upstream-проекта. |
 
 ---
 
@@ -58,27 +68,14 @@ sudo bash deploy/family/deploy.sh
 
 | Фича | Описание |
 |------|----------|
-| **Reality mode** | При пробинге DPI-сканером сервер проксирует запрос на настоящий сайт-прикрытие (например, `yandex.ru`). |
-| **Rolling Tunnel** | Пул сокетов с общим `SessionID` (по умолчанию 3 параллельных канала) — устойчивость к блокировкам. |
+| **Reality mode** | При пробинге DPI-сканером сервер проксирует запрос на настоящий сайт-прикрытие. |
+| **Rolling Tunnel** | Пул сокетов с общим `SessionID` (3 параллельных канала) — устойчивость к блокировкам. |
 | **TLS-обфускация** | Поток шифруется с первого байта под видом `TLS Application Data`. |
 | **Anti-probing** | Активная защита от сканеров портов. |
-| **Встроенный фильтр-стек** | BitTorrent, SMTP/спам, доменный blacklist, anti-scanner. |
-| **Telegram-бот** | Пользователи получают/сбрасывают токен через `/start` → `/token`. |
-| **JWT + bcrypt** | Аутентификация админ-панели (HS256, секрет в файле 0600). |
+| **Фильтр-стек** | BitTorrent, SMTP/спам, доменный blacklist, anti-scanner. |
+| **Telegram-бот** | Пользователи получают токен через `/start` → `/token`. |
+| **JWT + bcrypt** | Аутентификация админ-панели. |
 | **Авто-деплой** | Один скрипт — от чистого VPS до работающего VPN за 5 минут. |
-
----
-
-## 📚 Документация
-
-| Файл | Назначение |
-|------|-----------|
-| [`DOCUMENTATION.md`](./DOCUMENTATION.md) | Полная техническая документация (архитектура, API, классы, troubleshooting). |
-| [`AUDIT.md`](./AUDIT.md) | Аудит качества кода, безопасности, зависимостей. 6 критических проблем + план рефакторинга. |
-| [`DEPENDENCIES-AUDIT.md`](./DEPENDENCIES-AUDIT.md) | Применённые патчи безопасности (0 CVE в npm после фиксов). |
-| [`plan.md`](./plan.md) | Пошаговый план развёртывания на VPS. |
-| [`deploy/README.md`](./deploy/README.md) | Документация полного деплоя. |
-| [`deploy/family/README.md`](./deploy/family/README.md) | Документация облегчённого деплоя. |
 
 ---
 
@@ -94,12 +91,10 @@ sudo bash deploy/family/deploy.sh
 
 ## 📜 Лицензия
 
-MIT — проект основан на [github.com/batchar2/fptn](https://github.com/batchar2/fptn) (MIT).
+MIT — проект основан на [github.com/batchar2/fptn](https://github.com/batchar2/fptn).
 
 ---
 
-## 🔗 Ссылки
+## 🔗 Полезные ссылки
 
-- **Автор:** ZDarow
-- **Оригинальный FPTN:** [github.com/batchar2/fptn](https://github.com/batchar2/fptn)
-- **Сайт проекта / клиенты:** [storage.googleapis.com/fptn.org/](https://storage.googleapis.com/fptn.org/)
+См. [docs/links.md](./docs/links.md) — upstream-репозитории, сайт проекта, клиенты, документация.
