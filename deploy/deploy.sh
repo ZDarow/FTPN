@@ -323,10 +323,8 @@ TELEGRAM_TOKEN=$TG_TOKEN
 BOT_ENABLED=$BOT_ENABLED
 SERVICE_NAME=$SERVICE_NAME
 MAX_USER_SPEED_LIMIT=$MAX_SPEED
-WELCOME_MESSAGE_EN=⚡ Welcome to the FPTN bot! ⚡\n
-Use /token to get your access link.
-WELCOME_MESSAGE_RU=⚡ Добро пожаловать в бот FPTN! ⚡\n
-Используйте /token для получения токена доступа.
+WELCOME_MESSAGE_EN="⚡ Welcome to the FPTN bot! ⚡\nUse /token to get your access link."
+WELCOME_MESSAGE_RU="⚡ Добро пожаловать в бот FPTN! ⚡\nИспользуйте /token для получения токена доступа."
 EOF
 say "  → $COMPOSE_DIR/admin/.env"
 
@@ -335,12 +333,8 @@ say "  → $COMPOSE_DIR/admin/.env"
 # ============================================================
 cat > "$COMPOSE_DIR/bot/.env" <<EOF
 TELEGRAM_API_TOKEN=$TG_TOKEN
-FPTN_WELCOME_MESSAGE_EN=⚡ Welcome to the FPTN bot! ⚡\n
-Use this bot to get a VPN access token or reset it.\n\n
-👉 Type /token to receive your connection token.
-FPTN_WELCOME_MESSAGE_RU=⚡ Добро пожаловать в бот FPTN! ⚡\n
-Этот бот позволяет получить токен доступа к VPN или сбросить его.\n\n
-👉 Введите /token для получения токена подключения.
+FPTN_WELCOME_MESSAGE_EN="⚡ Welcome to the FPTN bot! ⚡\nUse this bot to get a VPN access token or reset it.\n\n👉 Type /token to receive your connection token."
+FPTN_WELCOME_MESSAGE_RU="⚡ Добро пожаловать в бот FPTN! ⚡\nЭтот бот позволяет получить токен доступа к VPN или сбросить его.\n\n👉 Введите /token для получения токена подключения."
 ENABLE_BROTLI_COMPRESSION=$ENABLE_BROTLI
 MAX_USER_SPEED_LIMIT=$MAX_SPEED
 SERVICE_NAME=$SERVICE_NAME
