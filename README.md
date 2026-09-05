@@ -12,7 +12,7 @@
 # 1. (опционально) prereq — только если сервер чистый
 bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)
 
-# 2. VPN-сервер
+# 2. VPN-сервер (с TUI-настройкой и опциональной установкой fptn-manager)
 bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/install.sh)
 
 # 3. (опционально) админ-панель и Telegram-бот
@@ -21,6 +21,8 @@ bash /opt/fptn/deploy/install-bot.sh
 ```
 
 Каждый скрипт — **минимальный**, читаемый, понятный. Открывайте и смотрите что делает.
+
+**Бонус:** при установке VPN можно поставить **fptn-manager** — CLI-менеджер с меню (создание пользователей, генерация токенов, сброс паролей). После установки: `sudo fptn-manager`. Исходник: [github.com/FarazFe/fptn-manager](https://github.com/FarazFe/fptn-manager) (MIT).
 
 ---
 
@@ -42,7 +44,11 @@ deploy/
 ├── install.sh            # VPN-сервер (готовый образ fptnvpn/* с DockerHub)
 ├── install-admin.sh      # Админ-панель (сборка backend/frontend из исходников)
 ├── install-bot.sh        # Telegram-бот
-└── uninstall.sh          # Полное удаление
+├── configure.sh          # TUI-перенастройка .env (whiptail/dialog/stdin)
+├── uninstall.sh          # Полное удаление
+└── lib/
+    ├── tui.sh            # TUI-библиотека (whiptail > dialog > stdin)
+    └── install-manager.sh # Установка CLI-менеджера от FarazFe
 ```
 
 ---

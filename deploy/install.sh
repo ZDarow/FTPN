@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================
 #  FPTN VPN — минимальный инсталлятор (только VPN-сервер)
-# -------------------------------------------------------------
+#  ------------------------------------------------------------
 #  Использование:
 #    curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/install.sh | sudo bash
 #
 #  Что делает:
 #    1. Ставит Docker (если нет)
-#    2. Копирует docker-compose/.env.demo → .env
-#    3. Подставляет SERVER_EXTERNAL_IPS (авто-детект)
+#    2. Клонирует/обновляет репозиторий в /opt/fptn
+#    3. TUI-настройка .env (whiptail/dialog/stdin)
 #    4. Запускает VPN-сервер
+#    5. Опционально ставит fptn-manager (FarazFe)
 #
 #  Для админ-панели и Telegram-бота используйте:
 #    - deploy/install-admin.sh
@@ -20,6 +21,16 @@ set -Eeuo pipefail
 if [[ ${EUID} -ne 0 ]]; then
   echo "[!] Запустите от root: sudo bash $0"
   exit 1
+fi
+
+# ---- путь к скрипту и TUI-библиотеке ----
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo '.')"
+# Если скрипт пришёл через pipe (curl | bash) — SCRIPT_DIR=/tmp или cwd.
+# Подключаем tui.sh опционально (не критично, если файла нет).
+if [[ -f "$SCRIPT_DIR/lib/tui.sh" ]]; then
+  # shellcheck source=lib/tui.sh
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/lib/tui.sh"
 fi
 
 # ---- Настройки ----
@@ -77,7 +88,20 @@ cd "$INSTALL_DIR/fptn/docker-compose"
 docker compose pull
 docker compose up -d --remove-orphans
 
-# ---- 5. Готово ----
+# ---- 5. Опционально: fptn-manager (FarazFe) ----
+# CLI-менеджер: создание пользователей, генерация токенов, сброс паролей.
+# Скачивается из upstream-репозитория FarazFe/fptn-manager (MIT).
+MANAGER_INSTALLED="нет"
+if [[ -t 0 ]]; then
+  if tui_yesno "Установить fptn-manager?" "fptn-manager — это CLI-менеджер с меню:\n  • Создание VPN-пользователей\n  • Генерация токенов для клиентов\n  • Сброс паролей\n  • Просмотр логов и статуса\n  • Обновление образа\n\nПосле установки: sudo fptn-manager\n\nУстановить?"; then
+    bash "$SCRIPT_DIR/lib/install-manager.sh" && MANAGER_INSTALLED="да"
+  fi
+else
+  # Неинтерактивная сессия — пропускаем
+  warn "fptn-manager не установлен (нет tty). Поставить вручную: sudo bash $SCRIPT_DIR/lib/install-manager.sh"
+fi
+
+# ---- 6. Готово ----
 cat <<EOF
 
 ============================================================
@@ -93,6 +117,18 @@ cat <<EOF
     - Сгенерируйте токен:      fptn-passwd
     - Скачайте клиент:         https://storage.googleapis.com/fptn.org/
 
+  Менеджер пользователей (fptn-manager): $MANAGER_INSTALLED
+EOF
+if [[ "$MANAGER_INSTALLED" == "да" ]]; then
+  cat <<'EOF'
+    - Управление:    sudo fptn-manager
+EOF
+else
+  cat <<EOF
+    - Установить:    sudo bash $INSTALL_DIR/deploy/lib/install-manager.sh
+EOF
+fi
+cat <<EOF
   Опционально:
     - Админ-панель: bash $INSTALL_DIR/deploy/install-admin.sh
     - Telegram-бот: bash $INSTALL_DIR/deploy/install-bot.sh
