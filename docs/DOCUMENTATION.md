@@ -18,8 +18,7 @@
    - 2.2. [`fptn/` — C++ ядро](#22-fptn--c-ядро)
    - 2.3. [`fptn-admin/backend/` — FastAPI](#23-fptn-adminbackend--fastapi)
    - 2.4. [`fptn-admin/frontend/` — React SPA](#24-fptn-adminfrontend--react-spa)
-   - 2.5. [`deploy/` — автоматическое развёртывание](#25-deploy--автоматическое-развёртывание-полный-стек)
-   - 2.6. [`deploy/family/` — облегчённое развёртывание](#26-deployfamily--облегчённое-развёртывание-vpn--бот-опционально-панель)
+   - 2.5. [`deploy/` — скрипты развёртывания](#25-deploy--скрипты-развёртывания)
 3. [Установка, настройка окружения и запуск](#3-установка-настройка-окружения-и-запуск)
    - 3.1. [Системные требования](#31-системные-требования)
    - 3.2. [Быстрый старт (production на VPS)](#32-быстрый-старт-production-на-vps)
@@ -161,24 +160,24 @@
 | pip-audit | ≥ 2.9 | Аудит зависимостей (dev) |
 | poetry | 2.3.2 | Менеджер зависимостей |
 
-**Frontend (React SPA)** — версии зафиксированы в `package.json` с `engines` и `overrides`
+**Frontend (React SPA)** — версии зафиксированы в `package.json` (CVE-fix через `overrides`)
 
 | Компонент | Версия | Назначение |
 |-----------|--------|------------|
 | React | **18.3.1** | UI-фреймворк |
-| TypeScript | **5.7.3** (5.9.3 фактически) | Типизация |
-| Vite | **8.2.2** | Бандлер + dev-сервер |
+| TypeScript | **5.4.5** | Типизация |
+| Vite | **5.4.21** | Бандлер + dev-сервер (стабильная LTS) |
 | Tailwind CSS | **3.4.17** | Стили |
-| react-router-dom | **7.18.3** | Маршрутизация |
+| react-router-dom | **7.18.3** | Маршрутизация (CVE-fix) |
 | react-i18next | 14.1.3 | i18n (en/ru) |
 | i18next | 23.16.8 | i18n-ядро |
 | brotli-wasm | 3.0.1 | Декодирование токенов в браузере |
 | lucide-react | **0.469.0** | Иконки |
-| vitest | **5.0.0** | Тесты |
+| vitest | **2.1.9** | Тесты |
 | jsdom | **25.0.1** | Тестовое окружение |
 | prettier | **3.4.2** | Форматирование |
 | eslint | **8.57.1** | Линтинг |
-| @vitejs/plugin-react | **4.3.4** | React-fast-refresh |
+| @vitejs/plugin-react | **4.7.0** | React-fast-refresh |
 
 **Инфраструктура**
 
@@ -516,86 +515,53 @@ fptn-admin/frontend/
 - **Token-декодирование** через `brotli-wasm` (только в браузере) для токенов формата `fptnb:`.
 - **i18n** — переключение на лету, сохранение в localStorage.
 
-### 2.5. `deploy/` — автоматическое развёртывание (полный стек)
+### 2.5. `deploy/` — скрипты развёртывания
+
+5 простых скриптов, **без копирования исходников** (для VPN-сервера используется готовый образ `fptnvpn/fptn-vpn-server:0.4.4` с DockerHub):
 
 ```
 deploy/
-├── deploy.sh                  # 505 строк — главный инсталлятор
-├── README.md                  # Подробная документация
-├── systemd/
-│   ├── fptn-server.service
-│   ├── fptn-admin-backend.service
-│   ├── fptn-admin-frontend.service
-│   ├── fptn-telegram-bot.service
-│   ├── fptn-healthcheck.service    # Проверка каждые 5 мин
-│   └── fptn-healthcheck.timer      # Systemd timer
-└── scripts/
-    ├── update.sh              # Pull образов + рестарт
-    ├── backup.sh              # Бэкап users.list / admins.json / servers.json
-    ├── status.sh              # Статус одной командой
-    ├── tail-logs.sh           # Просмотр логов
-    ├── add-user.sh            # Создать VPN-пользователя
-    ├── issue-token.sh         # Выдать токен через API
-    ├── setup-letsencrypt.sh   # Реальный SSL через certbot
-    └── swap-setup.sh          # Создать swap (для 1 ГБ VPS)
+├── prereq-install.sh     # ~190 строк — установка Docker, UFW, nginx, certbot на чистый сервер
+├── install.sh            # ~100 строк — VPN-сервер (3 вопроса, авто-детект IP)
+├── install-admin.sh      # ~60 строк — админ-панель (FastAPI + React, build из исходников)
+├── install-bot.sh        # ~40 строк — Telegram-бот (только если есть токен)
+└── uninstall.sh          # ~25 строк — полное удаление
 ```
 
-После развёртывания в `/usr/local/bin/` появляются утилиты:
-`fptn-update`, `fptn-backup`, `fptn-status`, `fptn-logs`, `fptn-add-user`, `fptn-issue-token`, `fptn-setup-letsencrypt`, `fptn-swap-setup`.
+**Установка на сервер** (3 команды):
 
-### 2.6. `deploy/family/` — облегчённое развёртывание (VPN + бот, опционально панель)
+```bash
+# 1. (только для чистого сервера) prereq
+bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)
 
-Минималистичный вариант для домашнего/семейного использования: только `fptn-server` + Telegram-бот. Веб-панель опциональна (включается флагом при первом запуске). Без Docker, без nginx — systemd-нативный.
+# 2. VPN-сервер
+bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/install.sh)
 
-```
-deploy/family/
-├── deploy.sh                  # 477 строк — главный инсталлятор
-├── README.md                  # Документация family-варианта
-├── systemd/
-│   ├── fptn-server.service
-│   ├── fptn-admin-backend.service
-│   ├── fptn-admin-frontend.service
-│   └── fptn-telegram-bot.service
-└── scripts/                   # 12 CLI-утилит
-    ├── fptn-add-user          # Создать пользователя
-    ├── fptn-list              # Список пользователей
-    ├── fptn-block / -unblock  # Блокировка (speed=0)
-    ├── fptn-reset-speed       # Изменить скорость
-    ├── fptn-issue-token       # Выдать access-токен
-    ├── fptn-show-config       # Показать серверы
-    ├── fptn-status            # Статус systemd-юнитов
-    ├── fptn-logs              # Просмотр логов
-    ├── fptn-backup            # Бэкап users.list/servers.json
-    ├── fptn-update            # Pull + рестарт
-    └── fptn-swap-setup        # Создать swap
+# 3. (опционально) админка и бот
+bash /opt/fptn/deploy/install-admin.sh
+bash /opt/fptn/deploy/install-bot.sh
 ```
 
-**Отличия от полного `deploy/`:**
-
-| Параметр | `deploy/` | `deploy/family/` |
-|----------|-----------|------------------|
-| Контейнеризация | Docker + Docker Compose | systemd-нативно |
-| Reverse-proxy | nginx + Let's Encrypt | нет (только прямое подключение) |
-| Сертификаты | Самоподписанный / LE | нет (только для панели, если включена) |
-| Web-панель | обязательна | опциональна (флаг при установке) |
-| Telegram-бот | отдельный контейнер | отдельный systemd-юнит |
-| Healthcheck | systemd timer + Docker HEALTHCHECK | только systemd timer |
-| Размер дистрибутива | ~150 МБ (образы) | ~30 МБ (бинарники) |
-| Сценарий | VPS с публичным IP | домашний сервер, мини-VPS, Raspberry Pi |
-
-**Хранение данных** (общий том через `users.list` + `servers.json`):
+**Где что лежит после установки:**
 
 ```
-/etc/fptn/
-├── users.list                # SHA-256 пароли, скорость, премиум
-├── servers.json              # Regular-серверы
-├── premium_servers.json      # Премиум-серверы
-├── servers_censored_zone.json # Серверы для заблокированных зон
-├── admins.json               # bcrypt-хеши админов (если панель включена)
-└── bot_settings.json         # Настройки Telegram-бота
+/opt/fptn/
+├── .git/                       # Клон репозитория (для обновления через git pull)
+├── fptn/docker-compose/        # docker-compose VPN-сервера + .env
+├── fptn-admin/                 # docker-compose админ-панели
+├── fptn/sysadmin-tools/        # docker-compose Telegram-бота
+├── data/fptn-server/           # users.list, servers.json, jwt_secret
+└── deploy/                     # Скрипты (для повторного запуска и удаления)
 ```
 
-Подробности — в `deploy/family/README.md`.
+**Принципы:**
+
+- `install.sh` — клонирует репо в `/opt/fptn`, копирует upstream `.env.demo` в `.env`, подставляет публичный IP, запускает `docker compose up -d`.
+- `install-admin.sh` / `install-bot.sh` — собирают образы локально из исходников (`docker compose up -d --build`).
+- `uninstall.sh` — `docker compose down` для всех 3-х стеков, удаление `/opt/fptn` и сети.
+- Никаких systemd-юнитов, certbot'а в скрипте, UFW-автонастройки, копирования исходников — это всё **наружу** скрипта, на усмотрение админа.
+
+Подробности — в [README.md](../../README.md).
 
 ---
 
@@ -637,88 +603,57 @@ deploy/family/
 
 ### 3.2. Быстрый старт (production на VPS)
 
-**Шаг 1. Подготовка VPS**
+**3 команды** для развёртывания:
 
 ```bash
-# Открой порты на файерволе
-sudo ufw allow 22/tcp
-sudo ufw allow 443/tcp     # VPN-туннель
-sudo ufw allow 2663/tcp    # админка HTTPS
-sudo ufw allow 8080/tcp    # админка HTTP (редирект)
-sudo ufw enable
+# 1. (опционально) prereq — установка Docker, UFW, nginx, certbot
+bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)
 
-# Убедись, что DNS A-запись домена указывает на IP VPS
-dig +short admin.example.com   # должен вернуть IP сервера
+# 2. VPN-сервер (использует готовый образ fptnvpn/fptn-vpn-server:0.4.4)
+bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/install.sh)
+
+# 3. (опционально) админ-панель и Telegram-бот
+bash /opt/fptn/deploy/install-admin.sh
+bash /opt/fptn/deploy/install-bot.sh
 ```
 
-**Шаг 2. Получи Telegram-токен**
+**Что делает install.sh:**
 
-Через [@BotFather](https://t.me/BotFather) в Telegram:
-1. `/newbot` → введи имя → получи токен вида `1234567890:AA...`
-2. Сохрани токен — он понадобится при развёртывании.
+1. Клонирует репозиторий в `/opt/fptn`
+2. Копирует upstream `.env.demo` → `.env`
+3. Авто-определяет публичный IP и подставляет в `SERVER_EXTERNAL_IPS`
+4. `docker compose pull` + `up -d` (готовый образ `fptnvpn/fptn-vpn-server:0.4.4`)
 
-**Шаг 3. Запуск развёртывания**
-
-```bash
-# С локальной машины
-scp -r FTPN user@your.server:/tmp/
-ssh user@your.server
-cd /tmp/FTPN
-sudo bash deploy/deploy.sh
-```
-
-Скрипт интерактивно запросит:
-- внешний IP (определит автоматически)
-- домен админ-панели
-- порты (по умолчанию 443/2663/8080/8000)
-- **Telegram-токен** (ввод скрыт)
-- логин/пароль администратора
-- параметры анти-DPI
-
-**Шаг 4. После завершения (≈ 5 минут)**
-
-Скрипт выведет итоговую сводку:
+**После установки (≈ 1 минута):**
 
 ```
 ============================================================
-   FPTN РАЗВЁРНУТ УСПЕШНО
+  FPTN VPN запущен!
 ============================================================
 
-  VPN-сервер:    https://your.domain:443
-  Админ-панель:  https://your.domain:2663
-  Backend API:   http://127.0.0.1:8000/api/v1/docs
-  Логин:         admin
-  Пароль:        (тот, что ввёл)
-
-  Данные:        /opt/fptn/data/fptn-server/
-  Конфиг:        /opt/fptn/deploy-config.env
+  Статус:    docker ps | grep fptn
+  Логи:      cd /opt/fptn/fptn/docker-compose && docker compose logs -f
+  Остановка: cd /opt/fptn/fptn/docker-compose && docker compose down
+============================================================
 ```
 
-Скрипт **автоматически предложит**:
-- Настроить Let's Encrypt (если FQDN, не IP)
-- Создать swap 2 ГБ (если RAM < 2 ГБ)
+**Следующие шаги:**
 
-**Шаг 5. Первый вход**
-
-1. Открой `https://admin.example.com:2663` (или `https://your.domain:2663`)
-2. Войди как `admin` / *введённый_пароль*
-3. **Сразу смени пароль** (система потребует)
-4. Перейди в **Settings → Telegram Bot**:
-   - вставь токен (если не сделал при развёртывании)
-   - переключи `Bot Enabled = ON`
-   - сохрани
-5. Перейди в **Servers → Add Server**:
-   - Name: `Main`
-   - Host: `<внешний IP сервера>`
-   - Port: `443`
-   - MD5 fingerprint: пусто
-   - Ping: `10`
-6. Добавь тестового пользователя:
-   ```bash
-   fptn-add-user 123456789 mysecret 100 0
+1. **Создать пользователя** в `/opt/fptn/data/fptn-server/users.list`:
    ```
-7. Напиши `/start` и `/token` Telegram-боту — получишь access-токен
-8. Скачай клиент с [fptn.org](https://storage.googleapis.com/fptn.org/) и вставь токен
+   123456789 5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8 100 0
+   ```
+   (формат: `<id> <sha256(pass)> <speed_mbps> <is_premium 0|1>`)
+
+2. **Запустить админ-панель** (`install-admin.sh`) для UI-управления.
+
+3. **Скачать клиент** [fptn.org](https://storage.googleapis.com/fptn.org/) и вставить токен.
+
+**Удаление:**
+
+```bash
+bash /opt/fptn/deploy/uninstall.sh
+```
 
 ### 3.3. Локальная разработка — C++
 

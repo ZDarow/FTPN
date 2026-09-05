@@ -112,7 +112,7 @@
 |-----|---------|-----------|
 | 1. prereq-install | `bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)` | Docker, Nginx, certbot, UFW |
 | 2. clone | `git clone https://github.com/ZDarow/FTPN.git` | Клонирование |
-| 3. deploy | `sudo bash deploy/deploy.sh` или `deploy/family/deploy.sh` | Развёртывание |
+| 3. deploy | `bash <(curl -fsSL .../install.sh)` | Развёртывание (3 команды) |
 
 ---
 
@@ -136,8 +136,7 @@
 | Аудит качества | [AUDIT.md](./AUDIT.md) |
 | Аудит зависимостей | [DEPENDENCIES-AUDIT.md](./DEPENDENCIES-AUDIT.md) |
 | План развёртывания | [plan.md](./plan.md) |
-| Документация полного деплоя | [deploy-full.md](./deploy-full.md) |
-| Документация family-деплоя | [deploy-family.md](./deploy-family.md) |
+| Деплой на сервер | [README.md](../README.md) | 3 команды, минимальные скрипты |
 | Upstream HTML-документация | [upstream/](./upstream/) |
 
 ---

@@ -2,40 +2,25 @@
 
 **FPTN** (Fast Protected Tunnel Network) — VPN-технология с защитой от DPI, маскирующая трафик под легитимный HTTPS. Использует технику **Reality** и пул rolling-туннелей.
 
-> **Версия:** 0.4.4 · **Дата:** 04.09.2026 · **Лицензия:** MIT
+> **Версия:** 0.4.4 · **Лицензия:** MIT
 
 ---
 
-## 🚀 Быстрый старт
-
-### Шаг 1. Установка зависимостей (чистый сервер)
+## 🚀 Установка (3 команды)
 
 ```bash
-# Однострочная установка: Docker, Compose, Nginx, certbot, UFW, базовые утилиты
+# 1. (опционально) prereq — только если сервер чистый
 bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)
-# Или локально: sudo bash deploy/prereq-install.sh
-# Для C++-сборки из исходников: добавь --with-cpp
+
+# 2. VPN-сервер
+bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/install.sh)
+
+# 3. (опционально) админ-панель и Telegram-бот
+bash /opt/fptn/deploy/install-admin.sh
+bash /opt/fptn/deploy/install-bot.sh
 ```
 
-Что ставит: Docker Engine + Compose v2, Nginx, certbot (Let's Encrypt), UFW, jq/htop/tmux/git. Идемпотентно.
-
-### Шаг 2. Клонирование и развёртывание
-
-**Полный стек (Docker, веб-панель, Let's Encrypt):**
-```bash
-git clone https://github.com/ZDarow/FTPN.git
-cd FTPN
-sudo bash deploy/deploy.sh
-```
-
-**Облегчённый (systemd, без Docker, опционально панель):**
-```bash
-git clone https://github.com/ZDarow/FTPN.git
-cd FTPN
-sudo bash deploy/family/deploy.sh
-```
-
-После развёртывания становятся доступны CLI-утилиты (`fptn-status`, `fptn-add-user`, `fptn-issue-token`, `fptn-backup`, `fptn-update`, …) — подробности в [docs/deploy-full.md](./docs/deploy-full.md) и [docs/deploy-family.md](./docs/deploy-family.md).
+Каждый скрипт — **минимальный**, читаемый, понятный. Открывайте и смотрите что делает.
 
 ---
 
@@ -43,21 +28,21 @@ sudo bash deploy/family/deploy.sh
 
 ```
 FTPN/
-├── fptn/                # C++20 ядро (VPN-сервер, клиент, протокол-lib)
-├── fptn-admin/          # Веб-панель (FastAPI + React)
-│   ├── backend/         # Python 3.13, FastAPI 0.115
-│   └── frontend/        # React 18.3 + TypeScript 5 + Vite 8
-├── deploy/              # Развёртывание полного стека
-│   ├── deploy.sh        # 505 строк — главный инсталлятор
-│   ├── systemd/         # 6 unit-файлов + healthcheck timer
-│   └── scripts/         # 8 утилит управления
-├── deploy/family/       # Развёртывание облегчённого варианта
-│   ├── deploy.sh        # 477 строк — минимальный инсталлятор
-│   ├── systemd/         # 4 unit-файла
-│   └── scripts/         # 12 CLI-утилит
-├── docs/                # Вся документация (см. ниже)
-├── LICENSE              # MIT
-└── .gitignore
+├── fptn/                 # C++20 ядро (VPN-сервер, клиент, протокол)
+├── fptn-admin/           # Веб-панель (FastAPI + React)
+│   ├── backend/          # Python 3.13, FastAPI 0.115
+│   └── frontend/         # React 18.3 + Vite 5.4 + react-router 7.18
+├── deploy/               # 5 скриптов (см. ниже)
+└── docs/                 # Документация
+```
+
+```
+deploy/
+├── prereq-install.sh     # Установка Docker, Compose, UFW на чистый сервер
+├── install.sh            # VPN-сервер (готовый образ fptnvpn/* с DockerHub)
+├── install-admin.sh      # Админ-панель (сборка backend/frontend из исходников)
+├── install-bot.sh        # Telegram-бот
+└── uninstall.sh          # Полное удаление
 ```
 
 ---
@@ -66,48 +51,38 @@ FTPN/
 
 | Документ | Назначение |
 |----------|-----------|
-| **[docs/DOCUMENTATION.md](./docs/DOCUMENTATION.md)** | Полная техническая документация (2267 строк): архитектура, API, классы C++, troubleshooting. |
-| **[docs/AUDIT.md](./docs/AUDIT.md)** | Аудит качества кода, безопасности, зависимостей (6 критических проблем + план рефакторинга). |
-| **[docs/DEPENDENCIES-AUDIT.md](./docs/DEPENDENCIES-AUDIT.md)** | Применённые патчи безопасности (0 CVE в npm после фиксов, 30 → 0). |
-| **[docs/plan.md](./docs/plan.md)** | Пошаговый план развёртывания на VPS. |
-| **[docs/deploy-full.md](./docs/deploy-full.md)** | Документация полного деплоя (Docker). |
-| **[docs/deploy-family.md](./docs/deploy-family.md)** | Документация облегчённого деплоя (systemd). |
-| **[docs/links.md](./docs/links.md)** | Справочник ссылок: upstream, сайты, клиенты, инструменты. |
-| **[docs/upstream/](./docs/upstream/)** | Оригинальная HTML-документация upstream-проекта. |
-
----
-
-## 🛡️ Ключевые особенности
-
-| Фича | Описание |
-|------|----------|
-| **Reality mode** | При пробинге DPI-сканером сервер проксирует запрос на настоящий сайт-прикрытие. |
-| **Rolling Tunnel** | Пул сокетов с общим `SessionID` (3 параллельных канала) — устойчивость к блокировкам. |
-| **TLS-обфускация** | Поток шифруется с первого байта под видом `TLS Application Data`. |
-| **Anti-probing** | Активная защита от сканеров портов. |
-| **Фильтр-стек** | BitTorrent, SMTP/спам, доменный blacklist, anti-scanner. |
-| **Telegram-бот** | Пользователи получают токен через `/start` → `/token`. |
-| **JWT + bcrypt** | Аутентификация админ-панели. |
-| **Авто-деплой** | Один скрипт — от чистого VPS до работающего VPN за 5 минут. |
+| [docs/DOCUMENTATION.md](./docs/DOCUMENTATION.md) | Архитектура, API, классы, troubleshooting |
+| [docs/AUDIT.md](./docs/AUDIT.md) | Аудит качества/безопасности |
+| [docs/DEPENDENCIES-AUDIT.md](./docs/DEPENDENCIES-AUDIT.md) | Аудит зависимостей |
+| [docs/plan.md](./docs/plan.md) | План развёртывания |
+| [docs/links.md](./docs/links.md) | Справочник ссылок |
+| [docs/upstream/](./docs/upstream/) | Оригинальная HTML-документация upstream |
 
 ---
 
 ## 🛠️ Стек
 
-- **C++20** (Boost 1.90, protobuf 5.29, fmt 12.1, spdlog 1.17, jwt-cpp, nlohmann_json, boringssl)
+- **C++20** (Boost 1.90, protobuf 5.29, fmt 12.1, spdlog 1.17, boringssl)
 - **Python 3.13** (FastAPI 0.115.6, uvicorn 0.34.0, PyJWT 2.10.1, bcrypt 4.2.1, brotli 1.1.0, python-telegram-bot 21.11.1)
-- **React 18.3.1** + **TypeScript 5.7** + **Vite 8.2** + **Tailwind 3.4** + **react-router 7.18** + **vitest 5.0**
-- **Docker** + **systemd** + **nginx** + **certbot** (Let's Encrypt)
-- **0 CVE** в npm-деревьях (30 → 0 после применённых фиксов)
+- **React 18.3.1** + **TypeScript 5.4** + **Vite 5.4.21** + **Tailwind 3.4** + **react-router 7.18** + **vitest 2.1**
+- **Docker** + готовые образы `fptnvpn/*` с DockerHub
+
+**Версии фронтенда зафиксированы**: см. `fptn-admin/frontend/package.json`. Build проверен: 6 сек, 1637 модулей, 326 КБ JS, 34/34 тестов.
+
+---
+
+## 🔑 Ключевые особенности
+
+- **Reality mode** — проксирование на настоящий сайт при пробинге DPI
+- **Rolling Tunnel** — 3 параллельных канала с общим SessionID
+- **TLS-обфускация** — шифрование с первого байта
+- **Anti-probing** — активная защита от сканеров
+- **Фильтр-стек** — BitTorrent, SMTP, DNSBL, anti-scanner
+- **Telegram-бот** — `/start` → `/token` для пользователей
+- **JWT + bcrypt** — аутентификация админ-панели
 
 ---
 
 ## 📜 Лицензия
 
-MIT — проект основан на [github.com/batchar2/fptn](https://github.com/batchar2/fptn).
-
----
-
-## 🔗 Полезные ссылки
-
-См. [docs/links.md](./docs/links.md) — upstream-репозитории, сайт проекта, клиенты, документация.
+MIT. Основан на [github.com/batchar2/fptn](https://github.com/batchar2/fptn).
