@@ -1,0 +1,9 @@
+.idea/
+.claude/
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+.pytest_cache/
+compose-data/

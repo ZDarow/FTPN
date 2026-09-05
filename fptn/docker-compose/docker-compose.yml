@@ -1,0 +1,72 @@
+services:
+  fptn-server:
+    restart: unless-stopped
+    image: fptnvpn/fptn-vpn-server:0.4.4
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+      - NET_RAW
+      - SYS_ADMIN
+      - SYS_RESOURCE
+    sysctls:
+      net.ipv4.ip_local_port_range: "6890 65535"
+      # These are per-network-namespace: setting them on the host does not
+      # reach the container. Requires tcp_bbr loaded on the host.
+      net.ipv4.tcp_congestion_control: "bbr"
+      net.ipv4.tcp_rmem: "4096 131072 33554432"
+      net.ipv4.tcp_wmem: "4096 65536 33554432"
+    ulimits:
+      nproc:
+        soft: 524288
+        hard: 524288
+      nofile:
+        soft: 524288
+        hard: 524288
+      memlock:
+        soft: 524288
+        hard: 524288
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "${FPTN_PORT}:443/tcp"
+    volumes:
+      - ./fptn-server-data:/etc/fptn
+    environment:
+      - ENABLE_DETECT_PROBING=${ENABLE_DETECT_PROBING}
+      - DEFAULT_PROXY_DOMAIN=${DEFAULT_PROXY_DOMAIN}
+      - ALLOWED_SNI_LIST=${ALLOWED_SNI_LIST}
+      - DISABLE_TORRENT_FILTER=${DISABLE_TORRENT_FILTER}
+      - DISABLE_SPAM_FILTER=${DISABLE_SPAM_FILTER}
+      - BLACKLIST_URL=${BLACKLIST_URL:-}
+      - PROMETHEUS_SECRET_ACCESS_KEY=${PROMETHEUS_SECRET_ACCESS_KEY}
+      - USE_REMOTE_SERVER_AUTH=${USE_REMOTE_SERVER_AUTH}
+      - REMOTE_SERVER_AUTH_HOST=${REMOTE_SERVER_AUTH_HOST}
+      - REMOTE_SERVER_AUTH_PORT=${REMOTE_SERVER_AUTH_PORT}
+      - MAX_ACTIVE_SESSIONS_PER_USER=${MAX_ACTIVE_SESSIONS_PER_USER}
+      - SERVER_EXTERNAL_IPS=${SERVER_EXTERNAL_IPS}
+      - MTU_SIZE=1400
+      - USING_DNS_SERVER=unbound
+      - DNS_IPV6_ENABLE=${DNS_IPV6_ENABLE:-false}
+      - DNS_IPV4_PRIMARY=${DNS_IPV4_PRIMARY:-8.8.8.8}
+      - DNS_IPV4_SECONDARY=${DNS_IPV4_SECONDARY:-8.8.4.4}
+      - DNS_IPV6_PRIMARY=${DNS_IPV6_PRIMARY:-2001:4860:4860::8888}
+      - DNS_IPV6_SECONDARY=${DNS_IPV6_SECONDARY:-2001:4860:4860::8844}
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep fptn-server"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - fptn-network
+networks:
+  fptn-network:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: dead:beef:cafe::/48
+          gateway: dead:beef:cafe::1
+        - subnet: 192.168.200.0/24
+          gateway: 192.168.200.1

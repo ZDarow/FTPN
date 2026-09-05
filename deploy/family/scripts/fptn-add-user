@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Добавить VPN-пользователя в users.list
+# Формат строки: <telegram_id> <sha256_password> <speed_mbps> <is_premium>
+# Использование: fptn-add-user <telegram_id> [password] [speed] [premium 0|1]
+set -Eeuo pipefail
+DATA_DIR="/opt/fptn/data/fptn-server"
+USERS_FILE="$DATA_DIR/users.list"
+
+# Загружаем дефолты из deploy-config.env
+[[ -f /opt/fptn/deploy-config.env ]] && . /opt/fptn/deploy-config.env
+DEFAULT_SPEED="${MAX_SPEED:-100}"
+
+TG_ID="${1:-}"
+[[ "$TG_ID" =~ ^[0-9]+$ ]] || { echo "Использование: fptn-add-user <telegram_id> [password] [speed] [premium]" >&2; exit 1; }
+PASSWORD="${2:-$(openssl rand -base64 9 | tr -dc 'A-Za-z0-9' | head -c 12)}"
+SPEED="${3:-$DEFAULT_SPEED}"
+PREMIUM="${4:-0}"
+
+# Проверка
+[[ "$SPEED" =~ ^[0-9]+$ ]] || { echo "Скорость должна быть числом" >&2; exit 1; }
+[[ "$PREMIUM" =~ ^[0-1]$ ]] || { echo "premium: 0 или 1" >&2; exit 1; }
+
+# Создаём файл, если нет
+mkdir -p "$DATA_DIR"
+[[ -f "$USERS_FILE" ]] || : > "$USERS_FILE"
+
+# Если уже есть
+if grep -qE "^${TG_ID} " "$USERS_FILE"; then
+  echo "Пользователь $TG_ID уже есть. Используй fptn-reset-speed для смены пароля."
+  exit 0
+fi
+
+# SHA-256 от пароля
+HASH=$(printf '%s' "$PASSWORD" | sha256sum | awk '{print $1}')
+
+# Атомарная запись (через temp-файл)
+TMP=$(mktemp "${USERS_FILE}.XXXX")
+printf '%s %s %s %s\n' "$TG_ID" "$HASH" "$SPEED" "$PREMIUM" >> "$TMP"
+cat "$USERS_FILE" >> "$TMP"
+mv -f "$TMP" "$USERS_FILE"
+chmod 644 "$USERS_FILE"
+
+# HUP для VPN-сервера (перечитать users.list)
+docker ps --filter "name=fptn-server" --format "{{.Names}}" | head -1 \
+  | xargs -r docker kill -s HUP 2>/dev/null || true
+
+echo "[+] Добавлен: $TG_ID"
+echo "    Логин:   $TG_ID"
+echo "    Пароль:  $PASSWORD"
+echo "    Скорость: ${SPEED} Мбит/с"
+echo "    Премиум: $PREMIUM"
+echo
+echo "Токен (отправь юзеру):"
+fptn-issue-token "$TG_ID"

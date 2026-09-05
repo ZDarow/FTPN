@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Список всех VPN-пользователей
+# Использование: fptn-list [filter: all|blocked|premium]
+set -Eeuo pipefail
+DATA_DIR="/opt/fptn/data/fptn-server"
+USERS_FILE="$DATA_DIR/users.list"
+
+if [[ ! -f "$USERS_FILE" ]]; then
+  echo "Файл $USERS_FILE не найден"
+  exit 1
+fi
+
+FILTER="${1:-all}"
+
+printf '%-15s %-10s %-8s %s\n' "TELEGRAM_ID" "СТАТУС" "МБИТ/С" "ПРЕМИУМ"
+printf -- '----------------------------------------\n'
+
+while read -r tg_id hash speed premium; do
+  # Пропуск пустых строк и комментариев
+  [[ -z "$tg_id" || "$tg_id" =~ ^# ]] && continue
+
+  status="active"
+  (( speed == 0 )) && status="BLOCKED"
+
+  case "$FILTER" in
+    blocked) (( speed == 0 )) || continue ;;
+    premium) (( premium == 1 )) || continue ;;
+  esac
+
+  prem="нет"
+  (( premium == 1 )) && prem="ДА"
+
+  printf '%-15s %-10s %-8s %s\n' "$tg_id" "$status" "$speed" "$prem"
+done < "$USERS_FILE"
+
+total=$(grep -cvE '^#|^$' "$USERS_FILE" 2>/dev/null || echo 0)
+blocked=$(awk '$3==0' "$USERS_FILE" 2>/dev/null | wc -l)
+premium=$(awk '$4==1' "$USERS_FILE" 2>/dev/null | wc -l)
+echo
+echo "Всего: $total | Заблокировано: $blocked | Премиум: $premium"

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Статус FPTN Family Edition
+set -Eeuo pipefail
+DATA_DIR="/opt/fptn/data/fptn-server"
+INSTALL_DIR="/opt/fptn"
+
+hr() { printf -- '----------------------------------------\n'; }
+
+hr
+printf "FPTN Family • %s • uptime %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$(uptime -p 2>/dev/null || echo '-')"
+
+hr
+echo "Контейнеры:"
+docker ps --filter "name=fptn" --format "  {{.Names}}\t{{.Status}}" 2>/dev/null || echo "  Docker недоступен"
+
+hr
+echo "Слушаемые порты:"
+ss -tulpn 2>/dev/null | grep -E ":(443|8000|2663|8080) " | sed 's/^/  /' || echo "  ss недоступна"
+
+hr
+echo "Внешний IP: $(curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null || echo '?')"
+
+hr
+echo "Свободное место:"
+df -h /opt / 2>/dev/null | tail -n +2 | sed 's/^/  /'
+
+hr
+echo "Память:"
+free -h 2>/dev/null | sed 's/^/  /'
+
+if [[ -f "$DATA_DIR/users.list" ]]; then
+  hr
+  echo "Пользователи:"
+  TOTAL=$(grep -cvE '^#|^$' "$DATA_DIR/users.list" 2>/dev/null || echo 0)
+  BLOCKED=$(awk '$3==0' "$DATA_DIR/users.list" 2>/dev/null | wc -l | tr -d ' ')
+  PREMIUM=$(awk '$4==1' "$DATA_DIR/users.list" 2>/dev/null | wc -l | tr -d ' ')
+  printf "  всего: %s | заблокировано: %s | премиум: %s\n" "$TOTAL" "$BLOCKED" "$PREMIUM"
+fi

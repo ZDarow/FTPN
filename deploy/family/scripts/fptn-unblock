@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Разблокировать пользователя + новая скорость
+# Использование: fptn-unblock <telegram_id> [speed]
+set -Eeuo pipefail
+USERS_FILE="/opt/fptn/data/fptn-server/users.list"
+[[ -f /opt/fptn/deploy-config.env ]] && . /opt/fptn/deploy-config.env
+DEFAULT_SPEED="${MAX_SPEED:-100}"
+
+TG_ID="${1:-}"
+SPEED="${2:-$DEFAULT_SPEED}"
+[[ "$TG_ID" =~ ^[0-9]+$ ]] || { echo "Использование: fptn-unblock <telegram_id> [speed]" >&2; exit 1; }
+[[ "$SPEED" =~ ^[0-9]+$ && $SPEED -gt 0 ]] || { echo "Скорость > 0" >&2; exit 1; }
+[[ -f "$USERS_FILE" ]] || { echo "users.list не найден" >&2; exit 1; }
+
+if ! grep -qE "^${TG_ID} " "$USERS_FILE"; then
+  echo "Пользователь $TG_ID не найден"
+  exit 1
+fi
+
+# Меняем 3-е поле на новое
+sed -i.bak -E "s/^(${TG_ID} [a-f0-9]+ )[0-9]+( [01])$/\1${SPEED}\2/" "$USERS_FILE"
+rm -f "${USERS_FILE}.bak"
+
+docker ps --filter "name=fptn-server" --format "{{.Names}}" | head -1 \
+  | xargs -r docker kill -s HUP 2>/dev/null || true
+
+echo "[+] $TG_ID разблокирован, новая скорость: ${SPEED} Мбит/с"

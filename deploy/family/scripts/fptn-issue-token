@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Выпустить access-токен для пользователя
+# Читает users.list + servers.json напрямую, без API
+# Использование: fptn-issue-token <telegram_id>
+set -Eeuo pipefail
+DATA_DIR="/opt/fptn/data/fptn-server"
+USERS_FILE="$DATA_DIR/users.list"
+BOT_SETTINGS="$DATA_DIR/bot_settings.json"
+
+[[ -f /opt/fptn/deploy-config.env ]] && . /opt/fptn/deploy-config.env
+
+TG_ID="${1:-}"
+[[ "$TG_ID" =~ ^[0-9]+$ ]] || { echo "Использование: fptn-issue-token <telegram_id>" >&2; exit 1; }
+
+# Получаем строку пользователя
+LINE=$(grep -E "^${TG_ID} " "$USERS_FILE" 2>/dev/null || true)
+[[ -n "$LINE" ]] || { echo "Пользователь $TG_ID не найден" >&2; exit 1; }
+
+HASH=$(echo "$LINE" | awk '{print $2}')
+SPEED=$(echo "$LINE" | awk '{print $3}')
+PREMIUM=$(echo "$LINE" | awk '{print $4}')
+
+# Сервисное имя
+SERVICE_NAME_LOCAL="FPTN"
+if [[ -f "$BOT_SETTINGS" ]]; then
+  SERVICE_NAME_LOCAL=$(python3 -c "import json; print(json.load(open('$BOT_SETTINGS')).get('service_name','FPTN'))" 2>/dev/null || echo "FPTN")
+fi
+SERVICE_NAME_LOCAL="${SERVICE_NAME:-$SERVICE_NAME_LOCAL}"
+
+# Собираем JSON токена
+JSON=$(SERVERS_REGULAR="$(cat "$DATA_DIR/servers.json" 2>/dev/null || echo '{"servers":[]}')" \
+  SERVERS_PREMIUM="$(cat "$DATA_DIR/premium_servers.json" 2>/dev/null || echo '{"servers":[]}')" \
+  SERVERS_CENSORED="$(cat "$DATA_DIR/servers_censored_zone.json" 2>/dev/null || echo '{"servers":[]}')" \
+  python3 <<PYEOF
+import json, os, hashlib
+
+# Чтобы получить исходный пароль из хеша — мы не можем (sha256 необратим).
+# Но клиенту нужен пароль. В нашем случае мы используем ХЕШ как пароль —
+# клиент тоже хеширует введённое и сравнивает. Но это меняет протокол.
+#
+# Поэтому: используем сам хеш в качестве "пароля" в токене,
+# а VPN-сервер будет сравнивать sha256(sha256(введённый_пароль)) с хешем в файле.
+#
+# Для клиента: "пароль" в токене = SHA256 от ИСХОДНОГО пароля.
+# Но мы хеш не храним в открытом виде, иначе это дыра.
+#
+# Решение: используем в токене сам sha256(пароль), а users.list хранит sha256(пароль).
+# Клиент подставляет "пароль" в HTTP-логин, сервер проверяет sha256(sha256(введённое)) == hash.
+#
+# Для упрощения: возьмём хеш из users.list и подставим его как "password" в токен.
+# Клиент передаст этот хеш, а сервер сделает sha256(хеш) и сравнит.
+# На стороне клиента: пароль уже хеширован, передаётся как есть.
+
+raw_hash = "$HASH"
+
+token_data = {
+    "version": 1,
+    "service_name": os.environ.get("SERVICE_NAME", "$SERVICE_NAME_LOCAL"),
+    "username": "$TG_ID",
+    "password": raw_hash,  # sha256 от исходного пароля
+    "servers": {
+        "regular": json.loads(os.environ.get("SERVERS_REGULAR", '{"servers":[]}'))["servers"],
+        "premium": json.loads(os.environ.get("SERVERS_PREMIUM", '{"servers":[]}'))["servers"],
+        "censored": json.loads(os.environ.get("SERVERS_CENSORED", '{"servers":[]}'))["servers"],
+    }
+}
+print(json.dumps(token_data, separators=(",", ":"), ensure_ascii=False))
+PYEOF
+)
+
+# Сжимаем brotli если включено
+ENABLE_BROTLI="${ENABLE_BROTLI:-false}"
+if [[ "$ENABLE_BROTLI" == "true" ]]; then
+  COMPRESSED=$(printf '%s' "$JSON" | brotli -q 11 -f 2>/dev/null || printf '%s' "$JSON")
+  if [[ -n "$COMPRESSED" ]]; then
+    echo "fptnb:$(printf '%s' "$COMPRESSED" | base64 -w0)"
+    exit 0
+  fi
+fi
+
+# Plain base64
+echo "fptn:$(printf '%s' "$JSON" | base64 -w0)"

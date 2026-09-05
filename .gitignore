@@ -1,0 +1,136 @@
+# ============================================
+# FPTN .gitignore
+# ============================================
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.venv/
+venv/
+env/
+ENV/
+
+# --- Node / npm / frontend ---
+node_modules/
+.npm/
+.eslintcache
+.parcel-cache/
+.vite/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.npmrc
+.yarn/
+.pnp.*
+
+# --- Lock-файлы сторонних пакетных менеджеров (опционально) ---
+# poetry.lock — коммитим (нужен для воспроизводимости backend)
+# package-lock.json — коммитим (нужен для воспроизводимости frontend)
+# conan.lock — коммитим (для C++)
+
+# --- C++ / Conan / CMake ---
+build/
+build-*/
+cmake-build-*/
+out/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+conan_cache/
+.cache/
+conan.lock
+compile_commands.json
+
+# --- Docker / секреты / данные ---
+*.env
+.env
+.env.*
+!.env.example
+!.env.demo
+deploy-config.env
+docker-compose.override.yml
+
+# Секреты и пользовательские данные
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+jwt_secret
+*.secret
+admin_password
+admins.json
+users.list
+bot_settings.json
+servers.json
+premium_servers.json
+servers_censored_zone.json
+fptn-data/
+compose-data/
+data/
+
+# --- Локальные песочницы и эксперименты ---
+.sandbox/
+.sandbox/**
+docs/_build/
+*.bak
+*.tmp
+*.orig
+*.rej
+.cache/
+
+# --- IDE / Claude / агентские артефакты ---
+.claude/
+.kilo/
+.mcp_config*
+.continue/
+.cursor/
+.aider*
+.windsurf/
+
+# --- Логи ---
+*.log
+logs/
+*.log.*
+
+# --- OS-специфичное ---
+.Trash-*
+.fseventsd
+.Spotlight-V100
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# --- Большие бинарники ---
+*.tar.gz
+*.zip
+*.7z
+*.rar
+*.dmg
+*.iso

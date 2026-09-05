@@ -1,0 +1,40 @@
+#!/bin/bash
+
+export OUT_NETWORK_INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
+echo "[FPTN] Using network interface: $OUT_NETWORK_INTERFACE"
+
+# Download the domain blacklist before starting the server.
+BLACKLIST_FILE=/tmp/fptn-blacklist.txt
+BLACKLIST_ARG=""
+rm -f "${BLACKLIST_FILE}"
+if [ -n "${BLACKLIST_URL}" ]; then
+    echo "[FPTN] Downloading domain blacklist from: ${BLACKLIST_URL}"
+    if wget -4 -q --timeout=10 --tries=2 -O "${BLACKLIST_FILE}.tmp" "${BLACKLIST_URL}"; then
+        mv "${BLACKLIST_FILE}.tmp" "${BLACKLIST_FILE}"
+        BLACKLIST_ARG="--domain-blacklist-file=${BLACKLIST_FILE}"
+        echo "[FPTN] Domain blacklist saved to ${BLACKLIST_FILE}"
+    else
+        rm -f "${BLACKLIST_FILE}.tmp"
+        echo "[FPTN] WARNING: failed to download blacklist; using built-in list only"
+    fi
+fi
+
+exec /usr/local/bin/fptn-server \
+    --server-key=/etc/fptn/server.key \
+    --server-crt=/etc/fptn/server.crt \
+    --out-network-interface="${OUT_NETWORK_INTERFACE}" \
+    --server-port=4430 \
+    --enable-detect-probing="${ENABLE_DETECT_PROBING}" \
+    --default-proxy-domain="${DEFAULT_PROXY_DOMAIN}" \
+    --allowed-sni-list="${ALLOWED_SNI_LIST}" \
+    --tun-interface-name=fptn0 \
+    --disable-torrent-filter="$DISABLE_TORRENT_FILTER" \
+    --disable-spam-filter="$DISABLE_SPAM_FILTER" \
+    --prometheus-access-key="$PROMETHEUS_SECRET_ACCESS_KEY" \
+    --use-remote-server-auth="$USE_REMOTE_SERVER_AUTH" \
+    --remote-server-auth-host="$REMOTE_SERVER_AUTH_HOST" \
+    --remote-server-auth-port="$REMOTE_SERVER_AUTH_PORT" \
+    --max-active-sessions-per-user="$MAX_ACTIVE_SESSIONS_PER_USER" \
+    --server-external-ips="${SERVER_EXTERNAL_IPS}" \
+    --mtu-size="${MTU_SIZE}" \
+    ${BLACKLIST_ARG}

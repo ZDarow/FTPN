@@ -1,0 +1,26 @@
+[Unit]
+Description=FPTN healthcheck
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fptn/compose
+
+# Проверяем здоровье backend
+ExecStart=/bin/bash -c '\
+  BACKEND=$(docker ps --filter "name=fptn-admin-backend" --filter "status=running" -q | head -1); \
+  if [ -z "$$BACKEND" ]; then \
+    echo "[FAIL] fptn-admin-backend контейнер не запущен"; \
+    exit 1; \
+  fi; \
+  if ! docker exec $$BACKEND python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=5).read()" >/dev/null 2>&1; then \
+    echo "[FAIL] backend /health не отвечает"; \
+    exit 1; \
+  fi; \
+  VPN=$(docker ps --filter "name=fptn-server" --filter "status=running" -q | head -1); \
+  if [ -z "$$VPN" ]; then \
+    echo "[FAIL] fptn-server контейнер не запущен"; \
+    exit 1; \
+  fi; \
+  echo "[OK] FPTN stack healthy"'

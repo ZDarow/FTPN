@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Заблокировать пользователя (speed=0)
+# Использование: fptn-block <telegram_id>
+set -Eeuo pipefail
+USERS_FILE="/opt/fptn/data/fptn-server/users.list"
+
+TG_ID="${1:-}"
+[[ "$TG_ID" =~ ^[0-9]+$ ]] || { echo "Использование: fptn-block <telegram_id>" >&2; exit 1; }
+[[ -f "$USERS_FILE" ]] || { echo "users.list не найден" >&2; exit 1; }
+
+if ! grep -qE "^${TG_ID} " "$USERS_FILE"; then
+  echo "Пользователь $TG_ID не найден"
+  exit 1
+fi
+
+# Меняем 3-е поле на 0
+sed -i.bak -E "s/^(${TG_ID} [a-f0-9]+ )[0-9]+( [01])$/\10\2/" "$USERS_FILE"
+rm -f "${USERS_FILE}.bak"
+
+# Перечитать
+docker ps --filter "name=fptn-server" --format "{{.Names}}" | head -1 \
+  | xargs -r docker kill -s HUP 2>/dev/null || true
+
+echo "[+] $TG_ID заблокирован (speed=0)"
