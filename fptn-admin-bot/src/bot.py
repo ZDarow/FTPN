@@ -1,11 +1,9 @@
 import json
 import os
 import sys
-import base64
 import random
 import string
 import hashlib
-import tempfile
 import threading
 import subprocess
 from pathlib import Path
@@ -14,7 +12,7 @@ from typing import Optional
 
 import brotli
 from loguru import logger
-from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -22,6 +20,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
     CallbackQueryHandler,
+    ConversationHandler,
     CallbackContext,
 )
 
@@ -124,6 +123,16 @@ class UserManager:
         users = self.load_users()
         return users.get(username)
 
+    def create_user(self, username: str, speed: str, premium: bool = False) -> tuple[bool, str]:
+        users = self.load_users()
+        if username in users:
+            return False, "Пользователь уже существует"
+        password = self._generate_password()
+        hashed_password = self._hash_password(password)
+        users[username] = {"password": hashed_password, "speed": speed, "is_premium": premium}
+        self.save_users(users)
+        return True, password
+
     def set_premium(self, username: str, premium: bool) -> bool:
         users = self.load_users()
         if username not in users:
@@ -178,9 +187,8 @@ def escape_markdown(text: str) -> str:
 def get_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton("👥 Пользователи"), KeyboardButton("📊 Мониторинг")],
-            [KeyboardButton("⚙️ Сервер"), KeyboardButton("🔒 Безопасность")],
-            [KeyboardButton("📢 Рассылка"), KeyboardButton("ℹ️ Помощь")],
+            [KeyboardButton("👥 Пользователи"), KeyboardButton("📊 Статус")],
+            [KeyboardButton("🔄 Обновить"), KeyboardButton("ℹ️ Помощь")],
         ],
         resize_keyboard=True,
     )
@@ -202,48 +210,6 @@ def get_user_actions_keyboard(username: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🗑 Удалить", callback_data=f"delete:{username}")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back:users")],
     ])
-
-
-def get_server_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("📊 Статус"), KeyboardButton("📋 Логи")],
-            [KeyboardButton("🔄 Перезапуск"), KeyboardButton("💾 Бэкап")],
-            [KeyboardButton("⬅️ Назад")],
-        ],
-        resize_keyboard=True,
-    )
-
-
-def get_security_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("🚫 Блокировка"), KeyboardButton("✅ Разблокировка")],
-            [KeyboardButton("📊 Статистика"), KeyboardButton("⬅️ Назад")],
-        ],
-        resize_keyboard=True,
-    )
-
-
-def get_monitoring_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("📊 CPU/RAM"), KeyboardButton("🌐 Сеть")],
-            [KeyboardButton("💾 Диск"), KeyboardButton("🔄 Обновить")],
-            [KeyboardButton("⬅️ Назад")],
-        ],
-        resize_keyboard=True,
-    )
-
-
-def get_broadcast_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton("📢 Всем"), KeyboardButton("⭐ Только премиум")],
-            [KeyboardButton("⬅️ Назад")],
-        ],
-        resize_keyboard=True,
-    )
 
 
 def get_services_keyboard() -> InlineKeyboardMarkup:
@@ -373,6 +339,106 @@ async def cmd_user_delete(update: Update, context: CallbackContext, username: st
         await update.message.reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
 
 
+# ========== CREATE USER ==========
+CREATE_USER_USERNAME, CREATE_USER_SPEED, CREATE_USER_PREMIUM = range(3)
+
+
+async def cmd_create_start(update: Update, context: CallbackContext) -> int:
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("⛔ Access denied.")
+        return ConversationHandler.END
+
+    await update.message.reply_text("Введите имя пользователя:", reply_markup=get_main_keyboard())
+    return CREATE_USER_USERNAME
+
+
+async def cmd_create_username(update: Update, context: CallbackContext) -> int:
+    username = update.message.text.strip()
+    if not username:
+        await update.message.reply_text("Имя пользователя не может быть пустым. Введите имя пользователя:")
+        return CREATE_USER_USERNAME
+
+    context.user_data["create_username"] = username
+    await update.message.reply_text(f"Имя: `{username}`\nВведите скорость в Mbps:", parse_mode=ParseMode.MARKDOWN)
+    return CREATE_USER_SPEED
+
+
+async def cmd_create_speed(update: Update, context: CallbackContext) -> int:
+    speed = update.message.text.strip()
+    if not speed.isdigit():
+        await update.message.reply_text("Скорость должна быть числом. Введите скорость в Mbps:")
+        return CREATE_USER_SPEED
+
+    context.user_data["create_speed"] = speed
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Да", callback_data="premium:yes"), InlineKeyboardButton("Нет", callback_data="premium:no")],
+    ])
+    await update.message.reply_text(f"Скорость: `{speed}` Mbps\nСделать премиум?", parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    return CREATE_USER_PREMIUM
+
+
+async def cmd_create_premium(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    if not query:
+        await update.message.reply_text("Используйте кнопки для выбора.", reply_markup=get_main_keyboard())
+        return ConversationHandler.END
+
+    premium = query.data == "premium:yes"
+    username = context.user_data.get("create_username", "")
+    speed = context.user_data.get("create_speed", "")
+
+    if not username or not speed:
+        await query.message.reply_text("Ошибка: не хватает данных. Начните заново.", reply_markup=get_main_keyboard())
+        return ConversationHandler.END
+
+    success, password = user_manager.create_user(username, speed, premium)
+    if success:
+        await query.message.reply_text(
+            f"✅ Пользователь `{username}` создан.\n"
+            f"🚀 Скорость: {speed} Mbps\n"
+            f"⭐ Премиум: {'Да' if premium else 'Нет'}\n"
+            f"🔑 Пароль: `{password}`",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_main_keyboard(),
+        )
+    else:
+        await query.message.reply_text(f"❌ Не удалось создать пользователя: {password}", reply_markup=get_main_keyboard())
+
+    context.user_data.pop("create_username", None)
+    context.user_data.pop("create_speed", None)
+    return ConversationHandler.END
+
+
+async def cmd_create_cancel(update: Update, context: CallbackContext) -> int:
+    context.user_data.pop("create_username", None)
+    context.user_data.pop("create_speed", None)
+    await update.message.reply_text("Создание отменено.", reply_markup=get_main_keyboard())
+    return ConversationHandler.END
+
+
+# ========== SEARCH ==========
+async def cmd_search(update: Update, context: CallbackContext) -> None:
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("⛔ Access denied.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Использование: /search <запрос>", reply_markup=get_main_keyboard())
+        return
+
+    query = context.args[0]
+    results = user_manager.search_users(query)
+    if not results:
+        await update.message.reply_text(f"Пользователи по запросу `{query}` не найдены.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        return
+
+    buttons = []
+    for username in results.keys():
+        buttons.append([InlineKeyboardButton(username, callback_data=f"user:{username}")])
+    keyboard = InlineKeyboardMarkup(buttons)
+    await update.message.reply_text(f"🔍 Результаты поиска по `{query}`:", parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+
+
 # ========== SERVER ==========
 async def cmd_status(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
@@ -380,15 +446,35 @@ async def cmd_status(update: Update, context: CallbackContext) -> None:
         return
 
     try:
-        result = subprocess.run(
+        containers = subprocess.run(
             ["docker", "ps", "--format", "{{.Names}}\t{{.Status}}\t{{.Ports}}"],
             capture_output=True,
             text=True,
             check=True,
-        )
-        await update.message.reply_text(f"```\n{result.stdout}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_server_keyboard())
+        ).stdout.strip().split("\n")
+
+        if not containers or containers == [""]:
+            await update.message.reply_text("Контейнеры не найдены.", reply_markup=get_main_keyboard())
+            return
+
+        response = "📊 **Статус сервисов:**\n\n"
+        for line in containers:
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                name, status = parts[0], parts[1]
+                ports = parts[2] if len(parts) > 2 else ""
+                response += f"`{name}`\nСтатус: {status}\n"
+                if ports:
+                    response += f"Порты: {ports}\n"
+                response += "\n"
+
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить", callback_data="refresh:status")],
+            [InlineKeyboardButton("📋 Логи", callback_data="menu:logs")],
+        ])
+        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
     except Exception as e:
-        await update.message.reply_text(f"Не удалось получить статус: {e}", reply_markup=get_server_keyboard())
+        await update.message.reply_text(f"Не удалось получить статус: {e}", reply_markup=get_main_keyboard())
 
 
 async def cmd_logs(update: Update, context: CallbackContext) -> None:
@@ -415,9 +501,9 @@ async def _send_logs(update: Update, service: str) -> None:
         output = result.stdout + result.stderr
         if len(output) > 4000:
             output = output[-4000:]
-        await update.message.reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_server_keyboard())
+        await update.message.reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     except Exception as e:
-        await update.message.reply_text(f"Не удалось получить логи для {service}: {e}", reply_markup=get_server_keyboard())
+        await update.message.reply_text(f"Не удалось получить логи для {service}: {e}", reply_markup=get_main_keyboard())
 
 
 async def cmd_restart(update: Update, context: CallbackContext) -> None:
@@ -432,9 +518,9 @@ async def cmd_restart(update: Update, context: CallbackContext) -> None:
     service = context.args[0]
     try:
         subprocess.run(["docker", "restart", service], check=True)
-        await update.message.reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_server_keyboard())
+        await update.message.reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     except Exception as e:
-        await update.message.reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_server_keyboard())
+        await update.message.reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_main_keyboard())
 
 
 async def cmd_backup(update: Update, context: CallbackContext) -> None:
@@ -455,58 +541,10 @@ async def cmd_backup(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(
             f"✅ Бэкап создан:\n`{backup_file.name}`\nРазмер: {backup_file.stat().st_size / 1024:.1f} KB",
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=get_server_keyboard(),
+            reply_markup=get_main_keyboard(),
         )
     except Exception as e:
-        await update.message.reply_text(f"❌ Не удалось создать бэкап: {e}", reply_markup=get_server_keyboard())
-
-
-# ========== MONITORING ==========
-async def cmd_monitoring(update: Update, context: CallbackContext) -> None:
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
-        return
-
-    try:
-        cpu_usage = subprocess.run(["docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"],
-                                   capture_output=True, text=True, check=True).stdout
-
-        disk_usage = subprocess.run(["df", "-h", "/"], capture_output=True, text=True, check=True).stdout
-
-        uptime = subprocess.run(["uptime"], capture_output=True, text=True, check=True).stdout
-
-        response = f"📊 **Мониторинг сервера**\n\n"
-        response += f"⏱ Uptime: `{uptime.strip()}`\n\n"
-        response += f"💻 **Контейнеры:**\n```\n{cpu_usage}\n```\n"
-        response += f"💾 **Диск:**\n```\n{disk_usage}\n```"
-
-        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN, reply_markup=get_monitoring_keyboard())
-    except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка мониторинга: {e}", reply_markup=get_main_keyboard())
-
-
-async def cmd_network_stats(update: Update, context: CallbackContext) -> None:
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
-        return
-
-    try:
-        result = subprocess.run(["ss", "-tuln"], capture_output=True, text=True, check=True).stdout
-        await update.message.reply_text(f"🌐 **Открытые порты:**\n```\n{result}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_monitoring_keyboard())
-    except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка: {e}", reply_markup=get_main_keyboard())
-
-
-async def cmd_disk_stats(update: Update, context: CallbackContext) -> None:
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
-        return
-
-    try:
-        result = subprocess.run(["df", "-h"], capture_output=True, text=True, check=True).stdout
-        await update.message.reply_text(f"💾 **Диск:**\n```\n{result}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_monitoring_keyboard())
-    except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка: {e}", reply_markup=get_main_keyboard())
+        await update.message.reply_text(f"❌ Не удалось создать бэкап: {e}", reply_markup=get_main_keyboard())
 
 
 # ========== SECURITY ==========
@@ -524,7 +562,7 @@ async def cmd_block_user(update: Update, context: CallbackContext) -> None:
         return
 
     if not context.args:
-        await update.message.reply_text("Использование: /block <username>", reply_markup=get_security_keyboard())
+        await update.message.reply_text("Использование: /block <username>", reply_markup=get_main_keyboard())
         return
 
     username = context.args[0]
@@ -532,9 +570,9 @@ async def cmd_block_user(update: Update, context: CallbackContext) -> None:
         BLACKLIST.append(username)
         with open(BLACKLIST_FILE, "w") as fp:
             fp.write("\n".join(BLACKLIST) + "\n")
-        await update.message.reply_text(f"🚫 `{username}` заблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_security_keyboard())
+        await update.message.reply_text(f"🚫 `{username}` заблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     else:
-        await update.message.reply_text(f"`{username}` уже в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_security_keyboard())
+        await update.message.reply_text(f"`{username}` уже в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 async def cmd_unblock_user(update: Update, context: CallbackContext) -> None:
@@ -543,7 +581,7 @@ async def cmd_unblock_user(update: Update, context: CallbackContext) -> None:
         return
 
     if not context.args:
-        await update.message.reply_text("Использование: /unblock <username>", reply_markup=get_security_keyboard())
+        await update.message.reply_text("Использование: /unblock <username>", reply_markup=get_main_keyboard())
         return
 
     username = context.args[0]
@@ -551,9 +589,9 @@ async def cmd_unblock_user(update: Update, context: CallbackContext) -> None:
         BLACKLIST.remove(username)
         with open(BLACKLIST_FILE, "w") as fp:
             fp.write("\n".join(BLACKLIST) + "\n")
-        await update.message.reply_text(f"✅ `{username}` разблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_security_keyboard())
+        await update.message.reply_text(f"✅ `{username}` разблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     else:
-        await update.message.reply_text(f"`{username}` не найден в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_security_keyboard())
+        await update.message.reply_text(f"`{username}` не найден в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 async def cmd_security_stats(update: Update, context: CallbackContext) -> None:
@@ -571,7 +609,7 @@ async def cmd_security_stats(update: Update, context: CallbackContext) -> None:
     stats += f"🚫 Заблокировано: {blocked_count}\n"
     stats += f"🌐 Серверов: {len(SERVERS_LIST)}\n"
 
-    await update.message.reply_text(stats, parse_mode=ParseMode.MARKDOWN, reply_markup=get_security_keyboard())
+    await update.message.reply_text(stats, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 # ========== BROADCAST ==========
@@ -707,16 +745,15 @@ async def callback_handler(update: Update, context: CallbackContext) -> None:
         service = data.split(":", 1)[1]
         await _send_logs(update, service)
         await query.answer()
-    elif data.startswith("monitor:"):
-        action = data.split(":", 1)[1]
-        if action == "resources":
-            await cmd_monitoring(update, context)
-        elif action == "network":
-            await cmd_network_stats(update, context)
-        elif action == "disk":
-            await cmd_disk_stats(update, context)
-        elif action == "refresh":
-            await cmd_monitoring(update, context)
+    elif data.startswith("refresh:"):
+        if data == "refresh:status":
+            await cmd_status(update, context)
+        await query.answer()
+    elif data.startswith("menu:"):
+        if data == "menu:logs":
+            await query.message.reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
+        elif data == "menu:users":
+            await cmd_users(update, context)
         await query.answer()
     else:
         await query.answer()
@@ -747,16 +784,10 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
     if state == "main":
         if text == "👥 Пользователи":
             await cmd_users(update, context)
-        elif text == "📊 Мониторинг":
-            context.user_data["menu_state"] = "monitoring"
-            await update.message.reply_text("📊 Мониторинг:", reply_markup=get_monitoring_keyboard())
-        elif text == "⚙️ Сервер":
-            context.user_data["menu_state"] = "server"
-            await update.message.reply_text("Управление сервером:", reply_markup=get_server_keyboard())
-        elif text == "🔒 Безопасность":
-            await cmd_security(update, context)
-        elif text == "📢 Рассылка":
-            await cmd_broadcast(update, context)
+        elif text == "📊 Статус":
+            await cmd_status(update, context)
+        elif text == "🔄 Обновить":
+            await cmd_status(update, context)
         elif text == "ℹ️ Помощь":
             await cmd_help(update, context)
         else:
@@ -768,53 +799,13 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
         elif text == "🔍 Поиск":
             await update.message.reply_text("Использование: /search <запрос>", reply_markup=get_main_keyboard())
         elif text == "➕ Создать":
-            await update.message.reply_text("Использование: /create <username> <speed> [premium]", reply_markup=get_main_keyboard())
+            await cmd_create_start(update, context)
         elif text == "🗑 Удалить":
             await update.message.reply_text("Использование: /delete <username>", reply_markup=get_main_keyboard())
         elif text == "⬅️ Назад":
             await cmd_menu(update, context)
         else:
             await update.message.reply_text("Неизвестная команда. Используйте меню или /help", reply_markup=get_main_keyboard())
-
-    elif state == "server":
-        if text == "📊 Статус":
-            await cmd_status(update, context)
-        elif text == "📋 Логи":
-            await update.message.reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
-        elif text == "🔄 Перезапуск":
-            await update.message.reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
-        elif text == "💾 Бэкап":
-            await cmd_backup(update, context)
-        elif text == "⬅️ Назад":
-            await cmd_menu(update, context)
-        else:
-            await update.message.reply_text("Неизвестная команда. Используйте меню или /help", reply_markup=get_server_keyboard())
-
-    elif state == "security":
-        if text == "🚫 Блокировка":
-            await update.message.reply_text("Использование: /block <username>", reply_markup=get_security_keyboard())
-        elif text == "✅ Разблокировка":
-            await update.message.reply_text("Использование: /unblock <username>", reply_markup=get_security_keyboard())
-        elif text == "📊 Статистика":
-            await cmd_security_stats(update, context)
-        elif text == "⬅️ Назад":
-            await cmd_menu(update, context)
-        else:
-            await update.message.reply_text("Неизвестная команда. Используйте меню или /help", reply_markup=get_security_keyboard())
-
-    elif state == "monitoring":
-        if text == "📊 CPU/RAM":
-            await cmd_monitoring(update, context)
-        elif text == "🌐 Сеть":
-            await cmd_network_stats(update, context)
-        elif text == "💾 Диск":
-            await cmd_disk_stats(update, context)
-        elif text == "🔄 Обновить":
-            await cmd_monitoring(update, context)
-        elif text == "⬅️ Назад":
-            await cmd_menu(update, context)
-        else:
-            await update.message.reply_text("Неизвестная команда. Используйте меню или /help", reply_markup=get_monitoring_keyboard())
 
     elif state == "broadcast":
         if text == "📢 Всем":
@@ -835,6 +826,7 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text("Неизвестное состояние. Возврат в главное меню.", reply_markup=get_main_keyboard())
 
 
+# ========== MAIN ==========
 def main() -> None:
     if not TELEGRAM_API_TOKEN:
         logger.error("TELEGRAM_API_TOKEN is not set.")
@@ -845,9 +837,12 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("menu", cmd_menu))
     application.add_handler(CommandHandler("users", cmd_users))
+    application.add_handler(CommandHandler("user", cmd_user_info))
     application.add_handler(CommandHandler("premium", cmd_user_premium))
     application.add_handler(CommandHandler("speed", cmd_user_speed))
     application.add_handler(CommandHandler("reset", cmd_user_reset))
+    application.add_handler(CommandHandler("delete", cmd_user_delete))
+    application.add_handler(CommandHandler("search", cmd_search))
     application.add_handler(CommandHandler("status", cmd_status))
     application.add_handler(CommandHandler("logs", cmd_logs))
     application.add_handler(CommandHandler("restart", cmd_restart))
@@ -858,6 +853,18 @@ def main() -> None:
     application.add_handler(CommandHandler("broadcast", cmd_broadcast))
     application.add_handler(CommandHandler("broadcast_premium", cmd_broadcast_premium))
     application.add_handler(CommandHandler("help", cmd_help))
+
+    create_conv = ConversationHandler(
+        entry_points=[CommandHandler("create", cmd_create_start)],
+        states={
+            CREATE_USER_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_create_username)],
+            CREATE_USER_SPEED: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_create_speed)],
+            CREATE_USER_PREMIUM: [CallbackQueryHandler(cmd_create_premium, pattern=r"^premium:")],
+        },
+        fallbacks=[CommandHandler("cancel", cmd_create_cancel)],
+    )
+    application.add_handler(create_conv)
+
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
