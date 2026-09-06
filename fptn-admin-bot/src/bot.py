@@ -59,6 +59,13 @@ else:
     BLACKLIST = []
 
 
+def _msg(update: Update):
+    """Вернуть Message из callback-query или обычного сообщения."""
+    if update.callback_query and update.callback_query.message:
+        return update.callback_query.message
+    return update.message
+
+
 def init_logger():
     logger.remove()
     log_file = Path(os.getenv("LOG_FILE", "/var/log/fptn_admin_bot.log"))
@@ -228,12 +235,12 @@ def get_services_keyboard() -> InlineKeyboardMarkup:
 # ========== MAIN MENU ==========
 async def start(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     context.user_data["menu_state"] = "main"
     welcome = FPTN_WELCOME_MESSAGE_EN or FPTN_WELCOME_MESSAGE_RU
-    await update.message.reply_text(
+    await _msg(update).reply_text(
         welcome,
         parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True,
@@ -243,33 +250,33 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 async def cmd_menu(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
     context.user_data["menu_state"] = "main"
-    await update.message.reply_text("Главное меню:", reply_markup=get_main_keyboard())
+    await _msg(update).reply_text("Главное меню:", reply_markup=get_main_keyboard())
 
 
 # ========== USERS ==========
 async def cmd_users(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
     context.user_data["menu_state"] = "users"
     users = user_manager.load_users()
     if not users:
-        await update.message.reply_text("Пользователи не найдены.", reply_markup=get_main_keyboard())
+        await _msg(update).reply_text("Пользователи не найдены.", reply_markup=get_main_keyboard())
         return
-    await update.message.reply_text("👥 Выберите пользователя:", reply_markup=get_users_inline_keyboard())
+    await _msg(update).reply_text("👥 Выберите пользователя:", reply_markup=get_users_inline_keyboard())
 
 
 async def cmd_user_info(update: Update, context: CallbackContext, username: str) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     user = user_manager.get_user(username)
     if not user:
-        await update.message.reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_users_inline_keyboard())
+        await _msg(update).reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_users_inline_keyboard())
         return
 
     premium = "Да" if user.get("is_premium") else "Нет"
@@ -278,20 +285,20 @@ async def cmd_user_info(update: Update, context: CallbackContext, username: str)
         f"🚀 Скорость: {user['speed']} Mbps\n"
         f"⭐ Премиум: {premium}\n"
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
+    await _msg(update).reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
 
 
 async def cmd_user_reset(update: Update, context: CallbackContext, username: str) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     _, new_password = user_manager.reset_password(username)
     if new_password is None:
-        await update.message.reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
+        await _msg(update).reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
         return
 
-    await update.message.reply_text(
+    await _msg(update).reply_text(
         f"🔑 Пароль для `{username}` сброшен.\nНовый пароль: `{new_password}`",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=get_user_actions_keyboard(username),
@@ -300,17 +307,17 @@ async def cmd_user_reset(update: Update, context: CallbackContext, username: str
 
 async def cmd_user_premium(update: Update, context: CallbackContext, username: str) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     user = user_manager.get_user(username)
     if not user:
-        await update.message.reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
+        await _msg(update).reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
         return
 
     new_premium = not user.get("is_premium", False)
     user_manager.set_premium(username, new_premium)
-    await update.message.reply_text(
+    await _msg(update).reply_text(
         f"⭐ Премиум для `{username}` установлен: {'Да' if new_premium else 'Нет'}",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=get_user_actions_keyboard(username),
@@ -319,34 +326,34 @@ async def cmd_user_premium(update: Update, context: CallbackContext, username: s
 
 async def cmd_user_speed(update: Update, context: CallbackContext, username: str, speed: str) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if user_manager.set_speed(username, speed):
-        await update.message.reply_text(f"🚀 Скорость для `{username}` установлена: {speed} Mbps", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
+        await _msg(update).reply_text(f"🚀 Скорость для `{username}` установлена: {speed} Mbps", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
     else:
-        await update.message.reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
+        await _msg(update).reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
 
 
 async def cmd_user_delete(update: Update, context: CallbackContext, username: str) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if user_manager.delete_user(username):
-        await update.message.reply_text(f"🗑 Пользователь `{username}` удален.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_users_inline_keyboard())
+        await _msg(update).reply_text(f"🗑 Пользователь `{username}` удален.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_users_inline_keyboard())
     else:
-        await update.message.reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
+        await _msg(update).reply_text(f"Пользователь `{username}` не найден.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_user_actions_keyboard(username))
 
 
 # ========== CREATE USER ==========
 async def cmd_create(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args or len(context.args) < 2:
-        await update.message.reply_text(
+        await _msg(update).reply_text(
             "Использование: `/create <username> <speed> [premium]`\nПример: `/create user1 100 premium`",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=get_main_keyboard(),
@@ -359,7 +366,7 @@ async def cmd_create(update: Update, context: CallbackContext) -> None:
 
     success, result = user_manager.create_user(username, speed, premium)
     if success:
-        await update.message.reply_text(
+        await _msg(update).reply_text(
             f"✅ Пользователь `{username}` создан.\n"
             f"🚀 Скорость: {speed} Mbps\n"
             f"⭐ Премиум: {'Да' if premium else 'Нет'}\n"
@@ -368,36 +375,36 @@ async def cmd_create(update: Update, context: CallbackContext) -> None:
             reply_markup=get_main_keyboard(),
         )
     else:
-        await update.message.reply_text(f"❌ Не удалось создать пользователя: {result}", reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"❌ Не удалось создать пользователя: {result}", reply_markup=get_main_keyboard())
 
 
 # ========== SEARCH ==========
 async def cmd_search(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args:
-        await update.message.reply_text("Использование: `/search <запрос>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text("Использование: `/search <запрос>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
         return
 
     query = context.args[0]
     results = user_manager.search_users(query)
     if not results:
-        await update.message.reply_text(f"Пользователи по запросу `{query}` не найдены.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"Пользователи по запросу `{query}` не найдены.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
         return
 
     buttons = []
     for username in results.keys():
         buttons.append([InlineKeyboardButton(username, callback_data=f"user:{username}")])
     keyboard = InlineKeyboardMarkup(buttons)
-    await update.message.reply_text(f"🔍 Результаты поиска по `{query}`:", parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    await _msg(update).reply_text(f"🔍 Результаты поиска по `{query}`:", parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
 
 # ========== SERVER ==========
 async def cmd_status(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     try:
@@ -409,7 +416,7 @@ async def cmd_status(update: Update, context: CallbackContext) -> None:
         ).stdout.strip().split("\n")
 
         if not containers or containers == [""]:
-            await update.message.reply_text("Контейнеры не найдены.", reply_markup=get_main_keyboard())
+            await _msg(update).reply_text("Контейнеры не найдены.", reply_markup=get_main_keyboard())
             return
 
         response = "📊 **Статус сервисов:**\n\n"
@@ -427,18 +434,18 @@ async def cmd_status(update: Update, context: CallbackContext) -> None:
             [InlineKeyboardButton("🔄 Обновить", callback_data="refresh:status")],
             [InlineKeyboardButton("📋 Логи", callback_data="menu:logs")],
         ])
-        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+        await _msg(update).reply_text(response, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
     except Exception as e:
-        await update.message.reply_text(f"Не удалось получить статус: {e}", reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"Не удалось получить статус: {e}", reply_markup=get_main_keyboard())
 
 
 async def cmd_logs(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args:
-        await update.message.reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
+        await _msg(update).reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
         return
 
     service = context.args[0]
@@ -456,31 +463,40 @@ async def _send_logs(update: Update, service: str) -> None:
         output = result.stdout + result.stderr
         if len(output) > 4000:
             output = output[-4000:]
-        await update.message.reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        # callback queries have no .message, use .callback_query.message instead
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+            await update.callback_query.answer()
+        else:
+            await _msg(update).reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     except Exception as e:
-        await update.message.reply_text(f"Не удалось получить логи для {service}: {e}", reply_markup=get_main_keyboard())
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"Не удалось получить логи для {service}: {e}", reply_markup=get_main_keyboard())
+            await update.callback_query.answer()
+        else:
+            await _msg(update).reply_text(f"Не удалось получить логи для {service}: {e}", reply_markup=get_main_keyboard())
 
 
 async def cmd_restart(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args:
-        await update.message.reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
+        await _msg(update).reply_text("Выберите сервис:", reply_markup=get_services_keyboard())
         return
 
     service = context.args[0]
     try:
         subprocess.run(["docker", "restart", service], check=True)
-        await update.message.reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     except Exception as e:
-        await update.message.reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_main_keyboard())
 
 
 async def cmd_backup(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     try:
@@ -493,23 +509,23 @@ async def cmd_backup(update: Update, context: CallbackContext) -> None:
             check=True,
         )
 
-        await update.message.reply_text(
+        await _msg(update).reply_text(
             f"✅ Бэкап создан:\n`{backup_file.name}`\nРазмер: {backup_file.stat().st_size / 1024:.1f} KB",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=get_main_keyboard(),
         )
     except Exception as e:
-        await update.message.reply_text(f"❌ Не удалось создать бэкап: {e}", reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"❌ Не удалось создать бэкап: {e}", reply_markup=get_main_keyboard())
 
 
 # ========== SECURITY ==========
 async def cmd_block_user(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args:
-        await update.message.reply_text("Использование: `/block <username>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text("Использование: `/block <username>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
         return
 
     username = context.args[0]
@@ -517,18 +533,18 @@ async def cmd_block_user(update: Update, context: CallbackContext) -> None:
         BLACKLIST.append(username)
         with open(BLACKLIST_FILE, "w") as fp:
             fp.write("\n".join(BLACKLIST) + "\n")
-        await update.message.reply_text(f"🚫 `{username}` заблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"🚫 `{username}` заблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     else:
-        await update.message.reply_text(f"`{username}` уже в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"`{username}` уже в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 async def cmd_unblock_user(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args:
-        await update.message.reply_text("Использование: `/unblock <username>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text("Использование: `/unblock <username>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
         return
 
     username = context.args[0]
@@ -536,14 +552,14 @@ async def cmd_unblock_user(update: Update, context: CallbackContext) -> None:
         BLACKLIST.remove(username)
         with open(BLACKLIST_FILE, "w") as fp:
             fp.write("\n".join(BLACKLIST) + "\n")
-        await update.message.reply_text(f"✅ `{username}` разблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"✅ `{username}` разблокирован.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
     else:
-        await update.message.reply_text(f"`{username}` не найден в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text(f"`{username}` не найден в блокировке.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 async def cmd_security_stats(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     users = user_manager.load_users()
@@ -556,17 +572,17 @@ async def cmd_security_stats(update: Update, context: CallbackContext) -> None:
     stats += f"🚫 Заблокировано: {blocked_count}\n"
     stats += f"🌐 Серверов: {len(SERVERS_LIST)}\n"
 
-    await update.message.reply_text(stats, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+    await _msg(update).reply_text(stats, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 # ========== BROADCAST ==========
 async def cmd_broadcast(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     if not context.args:
-        await update.message.reply_text("Использование: `/broadcast <сообщение>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+        await _msg(update).reply_text("Использование: `/broadcast <сообщение>`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
         return
 
     message_text = " ".join(context.args)
@@ -582,7 +598,7 @@ async def cmd_broadcast(update: Update, context: CallbackContext) -> None:
         except Exception:
             failed += 1
 
-    await update.message.reply_text(
+    await _msg(update).reply_text(
         f"📢 Рассылка завершена:\n✅ Доставлено: {sent}\n❌ Не доставлено: {failed}",
         reply_markup=get_main_keyboard(),
     )
@@ -591,7 +607,7 @@ async def cmd_broadcast(update: Update, context: CallbackContext) -> None:
 # ========== HELP ==========
 async def cmd_help(update: Update, context: CallbackContext) -> None:
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     help_text = """
@@ -623,7 +639,7 @@ async def cmd_help(update: Update, context: CallbackContext) -> None:
 /menu - меню
 /help - справка
     """.strip()
-    await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+    await _msg(update).reply_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
 
 
 # ========== CALLBACKS ==========
@@ -698,7 +714,7 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
         return
 
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("⛔ Access denied.")
+        await _msg(update).reply_text("⛔ Access denied.")
         return
 
     text = update.message.text.strip()
@@ -707,7 +723,7 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
     if state == "speed_input":
         username = context.user_data.get("selected_user")
         if not username:
-            await update.message.reply_text("Пользователь не выбран.", reply_markup=get_main_keyboard())
+            await _msg(update).reply_text("Пользователь не выбран.", reply_markup=get_main_keyboard())
             context.user_data["menu_state"] = "main"
             return
         await cmd_user_speed(update, context, username, text)
@@ -724,7 +740,7 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
         elif text == "ℹ️ Помощь":
             await cmd_help(update, context)
         else:
-            await update.message.reply_text("Неизвестная команда. Используйте меню или /help", reply_markup=get_main_keyboard())
+            await _msg(update).reply_text("Неизвестная команда. Используйте меню или /help", reply_markup=get_main_keyboard())
 
 
 # ========== MAIN ==========
