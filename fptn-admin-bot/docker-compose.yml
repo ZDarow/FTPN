@@ -20,6 +20,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./src:/app/src
       - fptn-server-data:/etc/fptn
+      - /opt/fptn/fptn/docker-compose/fptn-server-data:/opt/fptn/fptn/docker-compose/fptn-server-data:ro
     networks:
       - fptn-network
 
