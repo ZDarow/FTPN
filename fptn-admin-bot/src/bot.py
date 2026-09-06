@@ -8,9 +8,7 @@ import threading
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
 
-import brotli
 from loguru import logger
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
@@ -552,7 +550,7 @@ async def cmd_security_stats(update: Update, context: CallbackContext) -> None:
     blocked_count = len(BLACKLIST)
     premium_count = sum(1 for u in users.values() if u.get("is_premium"))
 
-    stats = f"📊 **Статистика безопасности**\n\n"
+    stats = "📊 **Статистика безопасности**\n\n"
     stats += f"👥 Пользователей: {len(users)}\n"
     stats += f"⭐ Премиум: {premium_count}\n"
     stats += f"🚫 Заблокировано: {blocked_count}\n"
