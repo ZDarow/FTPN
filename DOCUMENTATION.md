@@ -541,7 +541,7 @@ cd fptn-admin/frontend && npx vitest run
 ```
 
 ### Code Style
-- **Python:** Black, pylint, mypy strict mode.
+- **Python:** Black (120), pylint (120). ruff и mypy в проекте **не подключены**.
 - **TypeScript:** ESLint + Prettier (no trailing commas, no semicolons).
 - **C++:** Follow existing conventions in `fptn/`.
 

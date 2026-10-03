@@ -1,0 +1,37 @@
+{
+    "//": "Рекомендации по расширениям VS Code для рабочей области FTPN. Почему именно эти — см. AGENTS.md, раздел 3 и 11.",
+    "recommendations": [
+        "editorconfig.editorconfig",
+        "usernamehw.errorlens",
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "github.vscode-github-actions",
+
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "ms-python.pylint",
+
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "vitest.explorer",
+
+        "foxundermoon.shell-format",
+        "timonwong.shellcheck",
+        "redhat.vscode-yaml",
+
+        "llvm-vs-code-extensions.vscode-clangd",
+        "twxs.cmake",
+
+        "humao.rest-client"
+    ],
+    "unwantedRecommendations": [
+        "ms-vscode.cpptools-extension-pack",
+        "randomunknown3.cpptools-vscode-clangd",
+        "ms-python.python",
+        "ms-python.debugpy",
+        "bierner.markdown-preview-github-styles",
+        "yzhang.markdown-all-in-one",
+        "streetsidesoftware.code-spell-checker-native",
+        "ms-azuretools.vscode-docker"
+    ]
+}

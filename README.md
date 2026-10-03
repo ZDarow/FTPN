@@ -60,6 +60,8 @@ deploy/
 | [docs/DOCUMENTATION.md](./docs/DOCUMENTATION.md) | Архитектура, API, классы, troubleshooting |
 | [docs/AUDIT.md](./docs/AUDIT.md) | Аудит качества/безопасности |
 | [docs/DEPENDENCIES-AUDIT.md](./docs/DEPENDENCIES-AUDIT.md) | Аудит зависимостей |
+| [docs/ROADMAP.md](./docs/ROADMAP.md) | План работ по этапам с критериями готовности |
+| [AGENTS.md](./AGENTS.md) | Правила и контекст для AI-агентов |
 | [docs/plan.md](./docs/plan.md) | План развёртывания |
 | [docs/links.md](./docs/links.md) | Справочник ссылок |
 | [docs/upstream/](./docs/upstream/) | Оригинальная HTML-документация upstream |

@@ -1,0 +1,64 @@
+{
+    "editor.formatOnSave": true,
+    "editor.rulers": [120],
+    "files.eol": "\n",
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.pylint": "explicit"
+        }
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[shellscript]": {
+        "editor.defaultFormatter": "foxundermoon.shell-format"
+    },
+
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": ["fptn-admin/backend/tests"],
+    "python.testing.unittestEnabled": false,
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+
+    "eslint.workingDirectories": ["fptn-admin/frontend"],
+    "eslint.validate": ["typescript", "typescriptreact"],
+
+    "cmake.sourceDirectory": "fptn",
+    "cmake.buildDirectory": "${workspaceFolder}/fptn/build",
+    "cmake.ignoreCMakeListsMissing": true,
+    "cmake.configureOnOpen": false,
+
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/node_modules": true,
+        "fptn-master": true,
+        ".kilo": true,
+        "**/.venv": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/build": true,
+        "**/dist": true,
+        "**/__pycache__": true,
+        "**/.venv": true,
+        "fptn-master/**": true,
+        ".kilo/**": true,
+        "docs/upstream/**": true
+    },
+    "files.watcherExclude": {
+        "**/.venv/**": true,
+        "**/node_modules/**": true,
+        "**/build/**": true,
+        "fptn-master/**": true,
+        ".kilo/**": true
+    }
+}
