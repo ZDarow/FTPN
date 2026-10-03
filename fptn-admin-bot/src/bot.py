@@ -22,7 +22,7 @@ FPTN Admin Bot — максимальное меню + серверная час
 import json
 import os
 import sys
-import random
+import secrets
 import string
 import hashlib
 import threading
@@ -57,6 +57,19 @@ BLACKLIST_FILE = Path(os.getenv("BLACKLIST_FILE", "/etc/fptn/blocked_users.txt")
 BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "/opt/fptn/backups"))
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
 ENABLE_BROTLI_COMPRESSION = os.getenv("ENABLE_BROTLI_COMPRESSION", "false").lower() == "true"
+
+# Единственный источник правды для имён контейнеров: имена приходят из
+# callback_data и аргументов команд, поэтому перечислить их явно обязательно.
+ALLOWED_SERVICES = (
+    "docker-compose-fptn-server-1",
+    "fptn-admin-fptn-admin-backend-1",
+    "fptn-admin-fptn-admin-frontend-1",
+    "fptn-admin-bot-telegram-admin-bot-1",
+)
+
+# Имя файла бэкапа приходит из callback_data и уходит в tar -xzf, поэтому
+# допускается только строгий шаблон без каталогов и точек.
+BACKUP_NAME_RE = re.compile(r"^fptn-backup-\d{8}-\d{6}\.tar\.gz$")
 
 # ========== LOAD DATA ==========
 def _load_json(path: Path, default=[]):
@@ -96,7 +109,23 @@ def init_logger():
 
 
 def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS or len(ADMIN_IDS) == 0
+    """Fail-closed: пустой ADMIN_IDS запрещает всех, а не разрешает всех.
+
+    Прежнее поведение ``user_id in ADMIN_IDS or len(ADMIN_IDS) == 0`` выдавало
+    права администратора любому пользователю, если переменная окружения не
+    была задана (то есть на любом стенде с забытым .env).
+    """
+    return bool(ADMIN_IDS) and user_id in ADMIN_IDS
+
+
+def is_allowed_service(service: str) -> bool:
+    """Проверить имя контейнера по whitelist.
+
+    subprocess вызывается списком аргументов, поэтому инъекция командной строки
+    невозможна, но без whitelist администратор мог перезапустить любой контейнер
+    на хосте, включая контейнеры, выведенные из проекта.
+    """
+    return service in ALLOWED_SERVICES
 
 
 def escape_markdown(text: str) -> str:
@@ -137,14 +166,8 @@ def get_user_actions_keyboard(username: str) -> InlineKeyboardMarkup:
 
 
 def get_services_keyboard() -> InlineKeyboardMarkup:
-    services = [
-        "docker-compose-fptn-server-1",
-        "fptn-admin-fptn-admin-backend-1",
-        "fptn-admin-fptn-admin-frontend-1",
-        "fptn-admin-bot-telegram-admin-bot-1",
-    ]
     buttons = []
-    for service in services:
+    for service in ALLOWED_SERVICES:
         buttons.append([
             InlineKeyboardButton(f"📋 {service}", callback_data=f"logs:{service}"),
             InlineKeyboardButton(f"🔄 {service}", callback_data=f"restart:{service}"),
@@ -213,7 +236,8 @@ class UserManager:
         self.user_data_lock = threading.Lock()
 
     def _generate_password(self, length=8) -> str:
-        return "".join(random.choice(string.ascii_letters + string.digits) for _ in range(length))
+        alphabet = string.ascii_letters + string.digits
+        return "".join(secrets.choice(alphabet) for _ in range(length))
 
     def _hash_password(self, password: str) -> str:
         sha256 = hashlib.sha256()
@@ -465,6 +489,8 @@ def list_backups() -> list[Path]:
 
 def restore_backup(filename: str) -> tuple[bool, str]:
     """Restore a backup."""
+    if Path(filename).name != filename or not BACKUP_NAME_RE.match(filename):
+        return False, "Недопустимое имя файла бэкапа"
     backup_path = BACKUP_DIR / filename
     if not backup_path.exists():
         return False, "Файл не найден"
@@ -736,6 +762,12 @@ async def cmd_logs(update: Update, context: CallbackContext) -> None:
         return
 
     service = context.args[0]
+    if not is_allowed_service(service):
+        await _msg(update).reply_text(
+            f"⛔ Сервис `{service}` отсутствует в списке разрешённых.",
+            reply_markup=get_main_keyboard(),
+        )
+        return
     await _send_logs(update, service)
 
 
@@ -773,6 +805,12 @@ async def cmd_restart(update: Update, context: CallbackContext) -> None:
         return
 
     service = context.args[0]
+    if not is_allowed_service(service):
+        await _msg(update).reply_text(
+            f"⛔ Перезапуск `{service}` запрещён: сервис не входит в whitelist.",
+            reply_markup=get_main_keyboard(),
+        )
+        return
     try:
         subprocess.run(["docker", "restart", service], check=True)
         await _msg(update).reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
@@ -1002,15 +1040,29 @@ async def callback_handler(update: Update, context: CallbackContext) -> None:
 
     elif data.startswith("logs:"):
         service = data.split(":", 1)[1]
-        await _send_logs(update, service)
+        if not is_allowed_service(service):
+            await query.message.reply_text(
+                f"⛔ Логи `{service}` недоступны: сервис не входит в whitelist.",
+                reply_markup=get_main_keyboard(),
+            )
+            await query.answer()
+        else:
+            # _send_logs отвечает на callback_query самостоятельно.
+            await _send_logs(update, service)
 
     elif data.startswith("restart:"):
         service = data.split(":", 1)[1]
-        try:
-            subprocess.run(["docker", "restart", service], check=True)
-            await query.message.reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
-        except Exception as e:
-            await query.message.reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_main_keyboard())
+        if not is_allowed_service(service):
+            await query.message.reply_text(
+                f"⛔ Перезапуск `{service}` запрещён: сервис не входит в whitelist.",
+                reply_markup=get_main_keyboard(),
+            )
+        else:
+            try:
+                subprocess.run(["docker", "restart", service], check=True)
+                await query.message.reply_text(f"✅ Сервис `{service}` перезапущен.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_keyboard())
+            except Exception as e:
+                await query.message.reply_text(f"❌ Не удалось перезапустить {service}: {e}", reply_markup=get_main_keyboard())
         await query.answer()
 
     elif data.startswith("refresh:"):
@@ -1144,6 +1196,10 @@ async def text_handler(update: Update, context: CallbackContext) -> None:
 def main() -> None:
     if not TELEGRAM_API_TOKEN:
         logger.error("TELEGRAM_API_TOKEN is not set.")
+        sys.exit(1)
+
+    if not ADMIN_IDS:
+        logger.error("ADMIN_IDS is not set. Refusing to start: fail-closed auth would deny every user.")
         sys.exit(1)
 
     application = Application.builder().token(TELEGRAM_API_TOKEN).build()
