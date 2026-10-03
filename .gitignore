@@ -8,7 +8,10 @@ Thumbs.db
 *.swp
 *.swo
 *~
-.vscode/
+# .vscode коммитим частично: расширения и настройки рабочей области — в репозитории
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.iml
 
@@ -95,11 +98,19 @@ premium_servers.json
 servers_censored_zone.json
 fptn-data/
 compose-data/
-data/
+# Anchored to repo root on purpose: an unanchored data/ also matched source dirs
+# such as fptn-admin/frontend/src/data/, which silently hid committed source.
+/data/
 
 # --- Локальные песочницы и эксперименты ---
 .sandbox/
 .sandbox/**
+# Неотслеживаемый полный клон upstream C++-части. Держать вне git:
+# перекрывается excludes в .vscode/settings.json, удалять не нужно.
+fptn-master/
+# Дампы и экспорты трафика в корне (могут содержать заголовки Authorization).
+# Якорь к корню: /docs/ и исходники .txt не затрагиваются.
+/*.txt
 docs/_build/
 *.bak
 *.tmp
@@ -116,7 +127,7 @@ docs/_build/
 .cursor/
 .aider*
 .windsurf/
-.vscode/
+# .vscode обрабатывается выше: правила исключения заданы в секции «OS / IDE»
 
 # --- Логи ---
 *.log
