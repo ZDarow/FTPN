@@ -19,11 +19,11 @@
 | # | Задача | Источник | Статус |
 |---|--------|----------|--------|
 | 0.1 | Отозвать Telegram-токен у @BotFather — в рабочем дереве `fptn-admin-bot/.env` лежит непереданный в git, но действующий токен. Проверить историю **без печати секретов**: `git log --all --name-only -- '*.env' '*.env.*'` | §6 п.1–3 `AGENTS.md` | `[ ]` |
-| 0.2 | Whitelist имён docker-сервисов в `fptn-admin-bot/src/bot.py:452-457,477-496,675-681`; имя не должно приходить из `callback_data` | S10 | `[ ]` |
-| 0.3 | Закрыть `is_admin` при пустом `ADMIN_IDS` (`bot.py:78` сейчас возвращает `True` для всех) | S10 | `[ ]` |
-| 0.4 | Убрать дефолтные `ADMIN_LOGIN=admin`/`ADMIN_PASSWORD=admin` и `CORS_ORIGINS=*` из `fptn-admin/docker-compose.yml:7-11`; требовать явные значения при старте | S3, S8 | `[ ]` |
-| 0.5 | Не печатать пароль админа в финальный отчёт `deploy/install-admin.sh:161`; `chmod 600` для создаваемых `.env` (`install-admin.sh:132-145`) | аудит deploy | `[ ]` |
-| 0.6 | Заменить `random` на `secrets` для генерации паролей (`bot.py:87`). **Не связано с S1:** S1 — это пароли без соли (SHA-256), который чинится только в A1 | — | `[ ]` |
+| 0.2 | Whitelist имён docker-сервисов в `fptn-admin-bot/src/bot.py`; имя не должно приходить из `callback_data` | S10 | `[x]` |
+| 0.3 | Закрыть `is_admin` при пустом `ADMIN_IDS` (`bot.py:78` сейчас возвращает `True` для всех) | S10 | `[x]` |
+| 0.4 | Убрать дефолтные `ADMIN_LOGIN=admin`/`ADMIN_PASSWORD=admin` и `CORS_ORIGINS=*` из `fptn-admin/docker-compose.yml`; требовать явные значения при старте | S3, S8 | `[x]` |
+| 0.5 | Не печатать пароль админа в финальный отчёт `deploy/install-admin.sh`; `chmod 600` для создаваемых `.env` | аудит deploy | `[x]` |
+| 0.6 | Заменить `random` на `secrets` для генерации паролей (`bot.py`). **Не связано с S1:** S1 — это пароли без соли (SHA-256), который чинится только в A1 | — | `[x]` |
 
 **Критерий готовности этапа:**
 - `docker ps` показывает `docker.sock` **только** в read-only либо бот переведён на
@@ -46,7 +46,7 @@
 | 1.3 | Убрать из `docs/plan.md` раздел про `deploy/family/` — каталога в репозитории нет | `[ ]` |
 | 1.4 | Добавить в `AGENTS.md` §7 ссылки на `docs/ROADMAP.md` по этапам | `[x]` (этот документ) |
 | 1.5 | Перенести раздел `fptn/sysadmin-tools/` в статус «legacy» в документации; он не покрыт CI | `[ ]` |
-| 1.6 | Решить судьбу неотслеживаемого `fptn-master/` (дубликат upstream) и мусорных `1.txt`–`4.txt`, `хз.txt` в корне | `[ ]` |
+| 1.6 | ~~Решить судьбу неотслеживаемого `fptn-master/` и мусорных `1.txt`–`4.txt`, `хз.txt`~~ **исправлено**: каталог и корневые `*.txt` закрыты правилами `.gitignore`, дампы вынесены из репозитория в карантин | `[x]` |
 
 **Критерий готовности этапа:**
 - `git grep -n 'Vite 8\|Vitest 0\|React 19' -- docs/` не находит версий, отсутствующих в `package.json`;
@@ -125,14 +125,14 @@ baseline (зафиксировать baseline перед рефакторинг�
 
 | # | Задача | Статус |
 |---|--------|--------|
-| 3.1 | Починить версию Python в CI: `python-version: '3.14'` → `'3.13'` (`fptn-admin/.github/workflows/ci.yml:44`) | `[ ]` |
+| 3.1 | ~~Починить версию Python в CI~~ **исправлено**: `fptn-admin/.github/workflows/ci.yml` поднимает `3.13` | `[x]` |
 | 3.2 | **Перенести** оба workflow в корень `.github/workflows/` — сейчас там нет каталога, поэтому не выполняется ни один. C++-проверки (Conan + cpplint + cppcheck + ctest) уже есть в `fptn/.github/workflows/main.yml`, дублировать их не нужно | `[ ]` |
 | 3.3 | Добавить в CI `shellcheck deploy/*.sh deploy/lib/*.sh` и `bash -n` для всех скриптов | `[ ]` |
 | 3.4 | Добавить в CI аудит зависимостей: `npm audit --audit-level=high`, `poetry run pip-audit`, `conan outdated` | `[ ]` |
 | 3.5 | Покрыть `fptn-admin-bot` тестами: `pyproject.toml`, pytest, тесты на `is_admin`, парсер `callback_data`, whitelist сервисов | `[ ]` |
 | 3.6 | Тесты на deploy-скрипты: `shellcheck` + `bats` на неинтерактивный режим (TUI деградирует в stdin) | `[ ]` |
 | 3.7 | Backend-тесты: 7 → 15+ файлов (по `docs/AUDIT.md`), обязательно `routers/*` и `vpn_token.py` | `[ ]` |
-| 3.8 | Frontend-тесты: 4 → 8+ файлов, обязательно `AuthContext`, `RequireAuth`, `Login` | `[ ]` |
+| 3.8 | Frontend-тесты: 5 файлов / 34 теста → 8+ файлов, обязательно `AuthContext`, `RequireAuth`, `Login` | `[ ]` |
 | 3.9 | Матрица версий в CI (Python 3.13, Node 20/22) вместо единственной latest | `[ ]` |
 | 3.10 | Сканирование образов (Trivy/Grype) в CI | `[ ]` |
 

@@ -144,7 +144,9 @@ Renovate — только Conan.
 ## 4. Команды разработчика
 
 > На Windows рабочая среда для C++ и deploy-скриптов **нерабочая**. Используй WSL2 или Linux.
-> Backend и frontend на Windows работают.
+> Frontend на Windows работает. **Backend — нет:** `app/stores/vpn_user_store.py` импортирует
+> `fcntl`, поэтому pytest и pylint падают на Windows. Проверяй backend в Linux-контейнере:
+> `docker run --rm -v "$PWD":/app -w /app python:3.13-slim` с poetry, либо в WSL2.
 
 ### 4.1 Backend (`fptn-admin/backend/`)
 
@@ -277,17 +279,17 @@ sudo bash /opt/fptn/deploy/configure.sh        # перенастройка .env
 |----|----------|-------|
 | S1 | SHA-256 без соли для паролей VPN-пользователей | `bot.py:89-92`, `stores/vpn_user_store.py` |
 | S2 | Пароль пользователя внутри access-токена открытым текстом | `app/vpn_token.py` |
-| S3 | `cors_origins = "*"` по умолчанию | `app/config.py:34` |
+| S3 | ~~`cors_origins = "*"` по умолчанию~~ **исправлено**: дефолт пустой, compose требует переменную | `app/config.py`, `docker-compose.yml` |
 | S5 | Нет rate-limiting на `/auth/login` | `app/routers/auth.py` |
 | S6 | JWT в `localStorage` без httponly-альтернативы | `frontend/src/context/AuthContext.tsx` |
 | S7 | Самоподписанный TLS-сертификат на 10 лет в nginx-entrypoint | `fptn-admin/frontend/docker-entrypoint.sh` |
-| S8 | `ADMIN_LOGIN=admin` / `ADMIN_PASSWORD=admin` в compose-дефолтах | `fptn-admin/docker-compose.yml:7-8` |
-| S10 | `docker.sock` rw + имя сервиса из callback без whitelist | `fptn-admin-bot/docker-compose.yml:20`, `bot.py:675-681` |
+| S8 | ~~`ADMIN_LOGIN=admin` / `ADMIN_PASSWORD=admin` в compose-дефолтах~~ **исправлено**: `${VAR:?}` без дефолта | `fptn-admin/docker-compose.yml` |
+| S10 | `docker.sock` rw — **открыто**. Имя сервиса без whitelist — **исправлено** (`ALLOWED_SERVICES`) | `fptn-admin-bot/docker-compose.yml:20`, `bot.py` |
 | A1 | `session.cpp` — 1450 строк, нарушение SRP | `fptn/src/fptn-server/web/session/session.cpp` |
 | A2 | `route_manager.cpp` (1533 строки) без unit-тестов | `fptn/src/fptn-client/routing/route_manager.cpp` |
 | K1 | Кэш ServerHello без LRU — рост памяти по числу SNI | `fptn/src/fptn-server/web/handshake/handshake_cache_manager.cpp` |
 | M4 | 30+ опций `boost/*:without_*` вместо `without_default=True` | `fptn/conanfile.py` |
-| I1 | CI поднимает Python 3.14, а `pyproject.toml` требует `<3.14` | `fptn-admin/.github/workflows/ci.yml:44` |
+| I1 | ~~CI поднимает Python 3.14~~ **исправлено**: `3.13` | `fptn-admin/.github/workflows/ci.yml` |
 | I2 | CI не проверяет shell-скрипты и бота; ни один workflow не запускается | нет каталога `.github/workflows/` в корне |
 | I3 | Renovate покрывает только Conan | `fptn/renovate.json` |
 
