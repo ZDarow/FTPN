@@ -14,6 +14,7 @@ os.environ["CENSORED_SERVERS_FILE"] = os.path.join(_TMP, "servers_censored_zone.
 os.environ["JWT_SECRET_FILE"] = os.path.join(_TMP, "jwt_secret")
 os.environ["ADMIN_LOGIN"] = "admin"
 os.environ["ADMIN_PASSWORD"] = "adminpass"
+os.environ["CORS_ORIGINS"] = "http://testserver"
 os.environ["MAX_USER_SPEED_LIMIT"] = "30"
 os.environ["SERVICE_NAME"] = "fptn-test"
 os.environ["BOT_SETTINGS_FILE"] = os.path.join(_TMP, "bot_settings.json")

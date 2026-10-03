@@ -28,10 +28,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_ttl_minutes: int = 60
 
-    admin_login: str | None = "admin"
-    admin_password: str | None = "admin"
+    admin_login: str | None
+    admin_password: str | None
 
-    cors_origins: str = "*"
+    # Пустая строка = список origin пуст, то есть CORS-запросы не проходят.
+    # Прежний дефолт "*" разрешал любому сайту обращаться к API панели.
+    cors_origins: str = ""
 
     api_prefix: str = "/api/v1"
 
