@@ -144,12 +144,27 @@ WELCOME_MESSAGE_EN="$WELCOME_EN"
 WELCOME_MESSAGE_RU="$WELCOME_RU"
 EOF
 
+# В файле лежат пароль администратора и Telegram-токен: только root.
+chmod 600 "$ENV_FILE"
+
 # Создать users.list если нет
 touch /opt/fptn/data/fptn-server/users.list
 
 # Запуск
 cd /opt/fptn/fptn-admin
 docker compose up -d --build
+
+# Пароль не печатается в терминал: выводить его в лог установки нельзя.
+# Кладём рядом с .env отдельным файлом с правами root-only.
+CREDS_FILE="/root/fptn-admin-panel.pass"
+umask 077
+cat > "$CREDS_FILE" <<EOF
+FPTN admin panel
+URL:    http://<server>:2663 (или https://$HOST_INPUT:2663)
+Login:  $LOGIN_INPUT
+Password: $PASS_INPUT
+EOF
+chmod 600 "$CREDS_FILE"
 
 cat <<EOF
 
@@ -158,7 +173,9 @@ cat <<EOF
 ============================================================
   URL:    http://<server>:2663 (или https://$HOST_INPUT:2663)
   Логин:  $LOGIN_INPUT
-  Пароль: $PASS_INPUT
+  Пароль: сохранён в $CREDS_FILE (chmod 600, только root)
+
+  Вывести пароль: sudo cat $CREDS_FILE
 
   ⚠️ Сразу смените пароль после первого входа!
 
