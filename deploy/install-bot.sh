@@ -92,7 +92,7 @@ fi
   printf 'MAX_USER_SPEED_LIMIT=%s\n' "$SPEED_INPUT"
   printf 'SERVICE_NAME=FPTN.ONLINE\n'
   printf 'ENABLE_BROTLI_COMPRESSION=true\n'
-  printf 'FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server\n'
+  printf 'FPTN_CONFIGS_FOLDER=/opt/fptn/fptn/docker-compose/fptn-server-data\n'
 } > "$ENV_FILE"
 
 cd /opt/fptn/fptn/sysadmin-tools/telegram-bot

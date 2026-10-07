@@ -31,6 +31,8 @@ warn() { echo -e "\033[1;33m[!]\033[0m $*"; }
 err()  { echo -e "\033[0;31m[✗]\033[0m $*" >&2; }
 
 # Загрузить существующие значения, если .env уже есть
+INSTALL_DIR="/opt/fptn"
+VPN_DATA="$INSTALL_DIR/fptn/docker-compose/fptn-server-data"
 ENV_FILE="/opt/fptn/fptn-admin/.env"
 if [[ -f "$ENV_FILE" ]]; then
   tui_info "FPTN Admin" "Найден существующий $ENV_FILE\n\nБудем перенастраивать."
@@ -135,7 +137,7 @@ fi
   printf 'ADMIN_PASSWORD=%s\n' "$PASS_INPUT"
   printf 'CORS_ORIGINS=https://%s\n' "$HOST_INPUT"
   printf 'ENABLE_BROTLI_COMPRESSION=true\n'
-  printf 'FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server\n'
+  printf 'FPTN_CONFIGS_FOLDER=/opt/fptn/fptn/docker-compose/fptn-server-data\n'
   printf 'TELEGRAM_TOKEN=%s\n' "$TG_INPUT"
   printf 'BOT_ENABLED=%s\n' "$BOT_ENABLED"
   printf 'SERVICE_NAME=FPTN.ONLINE\n'
@@ -148,7 +150,7 @@ fi
 chmod 600 "$ENV_FILE"
 
 # Создать users.list если нет
-touch /opt/fptn/data/fptn-server/users.list
+touch /opt/fptn/fptn/docker-compose/fptn-server-data/users.list
 
 # Запуск
 cd /opt/fptn/fptn-admin

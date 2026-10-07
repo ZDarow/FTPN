@@ -133,6 +133,7 @@ docs/_build/
 *.log
 logs/
 *.log.*
+firebase-debug.log
 
 # --- OS-специфичное ---
 .Trash-*
