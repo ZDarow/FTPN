@@ -14,7 +14,7 @@
 #
 #  Что ставит:
 #    - Базовые утилиты: curl, wget, git, ca-certificates, gnupg
-#    - Docker Engine + Docker Compose v2 (для deploy/ и deploy/family/)
+#    - Docker Engine + Docker Compose v2 (для скриптов deploy/)
 #    - Nginx, certbot (Let's Encrypt) — для HTTPS админки
 #    - UFW, chrony, htop, jq, dnsutils
 #    - Опционально: build-essential, cmake, conan (для C++ сборки)
@@ -180,14 +180,14 @@ if [[ "${INSTALL_CPP_BUILD}" == "true" ]]; then
 fi
 hr
 
-say "Готово! Теперь клонируй FPTN и запускай deploy:"
+say "Готово! Теперь склонируй FPTN в /opt/fptn и запускай install-скрипты:"
 echo
 cat <<'EOF'
-  cd /tmp
-  git clone https://github.com/ZDarow/FTPN.git
-  cd FTPN
-  sudo bash deploy/deploy.sh          # полный стек (Docker)
-  # или
-  sudo bash deploy/family/deploy.sh   # облегчённый (systemd)
+  git clone https://github.com/ZDarow/FTPN.git /opt/fptn
+  cd /opt/fptn
+  sudo bash deploy/install.sh          # VPN-сервер
+  sudo bash deploy/install-admin.sh    # панель администратора
+  # позже, если нужно поменять настройки:
+  sudo bash deploy/configure.sh
 EOF
 hr

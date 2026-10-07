@@ -17,7 +17,7 @@
 | **ESLint ошибок** | 0 | 0 |
 | **Frontend тестов** | 34 (5 файлов) | 34 ✅ PASSED |
 | **Vite build** | OK | OK |
-| **Breaking changes** | — | React Router 6→7, Vite 4→8, Vitest 0→5 |
+| **Breaking changes** | — | React Router 6→7 (выполнено: 7.18.3) |
 
 ---
 

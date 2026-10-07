@@ -257,8 +257,11 @@ sudo bash /opt/fptn/deploy/configure.sh        # перенастройка .env
    `fptn-admin-bot/docker-compose.yml:20` монтирует `/var/run/docker.sock` в **rw**.
    Правки сюда — только с явным согласованием и комментарием в PR о радиусе компрометации.
 6. **Ввод пользователя в shell**: `subprocess` — только списком аргументов, `shell=False`.
-   Имя сервиса для `docker logs|restart` — **обязательно** проверять по whitelist
-   (сейчас в `fptn-admin-bot/src/bot.py` есть путь из callback-данных в `docker restart` без валидации).
+   Имя сервиса для `docker logs|restart` — **обязательно** проверять по whitelist.
+   В `fptn-admin-bot/src/bot.py` whitelist реализован (`ALLOWED_SERVICES`, `is_allowed_service`);
+   новые сервисы добавлять только туда явно.
+   **Встроенный бот в `fptn-admin/backend/app/telegram_bot.py` whitelist не имеет вообще** —
+   доступ к нему равен доступу к VPN, см. S16 ниже.
 7. **Изменение криптографии хранилища пользователей** (bcrypt/argon2, соль, формат `users.list`)
    требует синхронной правки C++-сервера — пароли сверяются на его стороне.
 8. `git push` не выполнять без явного указания.
@@ -285,6 +288,7 @@ sudo bash /opt/fptn/deploy/configure.sh        # перенастройка .env
 | S7 | Самоподписанный TLS-сертификат на 10 лет в nginx-entrypoint | `fptn-admin/frontend/docker-entrypoint.sh` |
 | S8 | ~~`ADMIN_LOGIN=admin` / `ADMIN_PASSWORD=admin` в compose-дефолтах~~ **исправлено**: `${VAR:?}` без дефолта | `fptn-admin/docker-compose.yml` |
 | S10 | `docker.sock` rw — **открыто**. Имя сервиса без whitelist — **исправлено** (`ALLOWED_SERVICES`) | `fptn-admin-bot/docker-compose.yml:20`, `bot.py` |
+| S16 | **Встроенный бот внутри backend выдаёт токен любому** — нет проверки отправителя. Доступ к боту = доступ к VPN | `app/telegram_bot.py:168-170` |
 | A1 | `session.cpp` — 1450 строк, нарушение SRP | `fptn/src/fptn-server/web/session/session.cpp` |
 | A2 | `route_manager.cpp` (1533 строки) без unit-тестов | `fptn/src/fptn-client/routing/route_manager.cpp` |
 | K1 | Кэш ServerHello без LRU — рост памяти по числу SNI | `fptn/src/fptn-server/web/handshake/handshake_cache_manager.cpp` |
@@ -295,17 +299,38 @@ sudo bash /opt/fptn/deploy/configure.sh        # перенастройка .env
 
 ### Дрейф документации (обязательно учитывать)
 
-- `docs/AUDIT.md` и `docs/DEPENDENCIES-AUDIT.md` датированы 04.09.2026 и частично описывают
-  **дорефакторинговое** состояние. По версиям зависимостей актуальнее `DEPENDENCIES-AUDIT.md`.
-- В документах встречаются версии, которых в коде нет («Vite 8», «TS 5.7», «React 19»).
-  Фактические версии — в §3 и в `package.json` / `pyproject.toml`.
-- `docs/plan.md` ссылается на `deploy/family/` — такого каталога в репозитории **нет**.
-- `deploy/prereq-install.sh:189-191` тоже ссылается на несуществующие `deploy/deploy.sh`
-  и `deploy/family/deploy.sh`. Реальные скрипты: `install.sh`, `install-admin.sh`,
-  `install-bot.sh`, `configure.sh`, `uninstall.sh`.
+- `docs/DEPENDENCIES-AUDIT.md` датирован 04.09.2026. Версии зависимостей
+  актуальнее в §3 этого файла и в `package.json` / `pyproject.toml`.
+- Версии сверены с манифестами 2026-10-03: React 18.3.1, TypeScript 5.4.5,
+  Vite 5.4.11, Vitest 2.1.8, Tailwind 3.4.17, ESLint 8.57.1, jsdom 25.0.1,
+  lucide-react 0.469.0, `react-router-dom` 7.18.3, `brotli-wasm` 3.0.1.
+  Упоминания «Vite 8», «TS 5.7», «React 19» из документации удалены.
+- `deploy/prereq-install.sh:189-191` всё ещё печатает в подсказке несуществующие
+  `deploy/deploy.sh` и `deploy/family/deploy.sh` — это единственное оставшееся
+  упоминание `deploy.sh` в репозитории. Реальные скрипты: `install.sh`,
+  `install-admin.sh`, `install-bot.sh`, `configure.sh`, `uninstall.sh`, `prereq-install.sh`.
 - В рабочем дереве есть неотслеживаемый дубликат C++-части — `fptn-master/fptn-master/`
   (полный клон upstream). Он закрыт через `.gitignore` и исключения в `.vscode/settings.json`,
   поэтому удалять его **не требуется**; не редактировать и не искать в нём правки.
+
+### Грабли развёртывания (проверено на VPS 2026-10-03)
+
+Полный разбор — `docs/DOCUMENTATION.md` §6.4. Кратко, что ломает подключение
+**без единой ошибки в логах**:
+
+- **Сервер, добавленный в `premium` вместо `regular`.** В C++ ядре разделения
+  `premium`/`regular` нет вообще (`grep -r premium fptn/src/` пуст) — это только
+  упаковка токена панелью (`vpn_token.py:22`). Не-premium пользователи получают
+  пустой `servers` и не могут подключиться.
+- **Отпечаток сертификата — MD5, а не SHA1.** `tls.cpp:280-294` считает
+  `X509_digest(cert, EVP_md5(), ...)` в lowercase без `:`. Проверка:
+  `openssl x509 -in server.crt -outform DER | md5sum`.
+- **Токен надо перевыпускать после регистрации сервера** — токен содержит снимок
+  списка. При этом `POST /users/{username}/token` **сбрасывает пароль**.
+- **Рабочий каталог VPN — `/opt/fptn-server/`**, а не клон в `/opt/FTPN`:
+  свой `docker-compose.yml`, свой `.env`, каталог `fptn-server-data/`.
+- **`/auth/login` принимает `username`, не `login`**; `/auth/refresh`,
+  `/auth/logout`, `PATCH /servers/{id}` и команда `/token_mac` не существуют.
 
 ---
 

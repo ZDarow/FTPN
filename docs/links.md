@@ -67,16 +67,16 @@
 | Технология | Документация / Репо |
 |-----------|---------------------|
 | React 18.3 | <https://react.dev/> |
-| TypeScript 5.7 | <https://www.typescriptlang.org/> |
-| Vite 8.2 | <https://vitejs.dev/> |
+| TypeScript 5.4 | <https://www.typescriptlang.org/> |
+| Vite 5.4 | <https://vitejs.dev/> |
 | Tailwind CSS 3.4 | <https://tailwindcss.com/> |
 | react-router 7.18 | <https://reactrouter.com/> |
 | react-i18next | <https://react.i18next.com/> |
 | brotli-wasm | <https://www.npmjs.com/package/brotli-wasm> |
 | lucide-react | <https://lucide.dev/> |
-| vitest 5.0 | <https://vitest.dev/> |
+| vitest 2.1 | <https://vitest.dev/> |
 | jsdom | <https://github.com/jsdom/jsdom> |
-| ESLint | <https://eslint.org/> |
+| ESLint 8.57 | <https://eslint.org/> |
 | Prettier | <https://prettier.io/> |
 
 ### Инфраструктура и DevOps

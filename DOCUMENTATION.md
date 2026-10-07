@@ -210,12 +210,19 @@ docker compose up -d --build
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `JWT_TTL_MINUTES` | Token lifetime | `60` |
-| `ADMIN_LOGIN` | Admin username | `admin` |
-| `ADMIN_PASSWORD` | Admin password | `admin12345` |
-| `CORS_ORIGINS` | Allowed CORS origins | `*` |
-| `FPTN_CONFIGS_FOLDER` | Path to VPN configs | `/opt/fptn/fptn/docker-compose/fptn-server-data` |
-| `TELEGRAM_TOKEN` | Bot token (optional) | — |
+| `ADMIN_LOGIN` | Admin username | **обязателен**, иначе compose не стартует |
+| `ADMIN_PASSWORD` | Admin password | **обязателен**, иначе compose не стартует |
+| `CORS_ORIGINS` | Allowed CORS origins, через запятую | `""` (пусто = запросы не проходят) |
+| `FPTN_CONFIGS_FOLDER` | Путь к данным VPN (монтируется в контейнер как `/etc/fptn`) | `/opt/fptn/data/fptn-server` — как задаёт `deploy/install-admin.sh:138`; на текущем VPS фактически `/opt/fptn-server/fptn-server-data` |
+| `TELEGRAM_TOKEN` | Bot token (optional) | `""` |
 | `BOT_ENABLED` | Enable bot integration | `false` |
+| `MAX_USER_SPEED_LIMIT` | Default speed limit (Mbps) | `30` |
+| `SERVICE_NAME` | Service display name | `fptn` |
+
+> **Дефолты `ADMIN_LOGIN`, `ADMIN_PASSWORD`, `CORS_ORIGINS` в compose — `${VAR:?...}`,**
+> то есть пустое значение останавливает `docker compose up`. Значения `admin` / `admin12345`
+> / `*`, которые были дефолтами до коммита `a7f6d8a`, больше нигде не применяются.
+> Эталон — `fptn-admin/.env.example` и `fptn-admin/backend/app/config.py`.
 
 #### Telegram Bots (`.env`)
 | Variable | Description | Default |
@@ -226,26 +233,56 @@ docker compose up -d --build
 | `MAX_USER_SPEED_LIMIT` | Default speed limit (Mbps) | `20` |
 | `SERVICE_NAME` | Service display name | `FPTN.ONLINE` |
 | `FPTN_CONFIGS_FOLDER` | Path to server data | `/etc/fptn` |
-| `ENABLE_BROTLI_COMPRESSION` | Enable Brotli tokens | `true` |
-| `ADMIN_IDS` | Comma-separated Telegram IDs | `0` (open) |
+| `ENABLE_BROTLI_COMPRESSION` | Enable Brotli tokens | `false` |
+| `ADMIN_IDS` | Comma-separated Telegram IDs | пусто = **никто не админ** (fail-closed) |
+
+> **`ADMIN_IDS` пустой — это отказ для всех, а не доступ для всех.**
+> `is_admin()` в `fptn-admin-bot/src/bot.py:118` возвращает `bool(ADMIN_IDS) and user_id in ADMIN_IDS`,
+> а `bot.py:1201-1203` завершает процесс с `exit(1)`, если переменная не задана.
+> Прежнее поведение `user_id in ADMIN_IDS or len(ADMIN_IDS) == 0` выдавало права любому.
+>
+> **Дефолт `ENABLE_BROTLI_COMPRESSION` — `false`** (`backend/app/config.py:16`).
+> При `false` токены имеют префикс `fptn:` в обычном base64;
+> при `true` — `fptnb:` в base64-обёртке brotli (q=11, lgwin=24, lgblock=24).
+>
+> ⚠️ **Расхождение:** `deploy/install-admin.sh:139` жёстко пишет
+> `ENABLE_BROTLI_COMPRESSION=true` в `.env`, хотя код по умолчанию — `false`.
+> Скрипт установки тем самым переопределяет безопасный дефолт и меняет формат
+> выдаваемых токенов на `fptnb:`. На текущем VPS значение выставлено в `false`
+> вручную. См. `docs/AUDIT.md`.
 
 ---
 
 ## 5. Configuration
 
 ### 5.1 VPN Server Configuration
-- **`servers.json`** — List of VPN servers (`id`, `name`, `host`, `port`, `sni`, `premium`).
-- **`premium_servers.json`** — Premium-only server list.
-- **`servers_censored_zone.json`** — Servers for censored regions.
+- **`servers.json`** — regular-серверы. Формат элемента: `name`, `host`, `md5_fingerprint`, `port`, `ping`.
+- **`premium_servers.json`** — серверы, которые получают **только** пользователи с `premiumAccess=true`.
+- **`servers_censored_zone.json`** — серверы для censored-зоны (поле `censored_zone_servers` в токене).
 - **`users.list`** — User database: `username hashed_password speed [premium_flag]`.
 - **`admins.json`** — Admin credentials.
 - **`bot_settings.json`** — Bot configuration.
 - **`blacklist.txt`** — Domain blacklist for censorship (2150+ entries).
 
+> **Три списка — это только упаковка токена, а не разные VPN-серверы.**
+> В C++-ядре (`fptn/src/`) упоминаний `premium`/`regular` нет вообще: `grep -r premium fptn/src/` пуст.
+> Списки формируются только панелью (`backend/app/vpn_token.py:22`):
+> `servers = premium + regular if is_premium else regular`.
+>
+> **Последствие ошибки:** если добавить единственный сервер в `premium`,
+> то все не-premium пользователи получат токен с **пустым** `servers` и не смогут подключиться.
+> Панель при этом не покажет ошибок, а VPN-сервер просто не увидит попыток handshake.
+>
+> **Правило:** единственный сервер, слушающий один порт, регистрируется в `regular`.
+> Проверка после регистрации — токен должен содержать непустой `servers`:
+> ```bash
+> curl -sk -X POST http://127.0.0.1:8000/api/v1/users/<user>/token -H "Authorization: Bearer $JWT"
+> ```
+
 ### 5.2 Admin Panel Configuration
-- Accessible via `https://<host>:2663` (default self-signed HTTPS).
-- Default credentials: `admin` / `admin12345`.
-- JWT tokens stored in browser `localStorage` (consider httpOnly cookies for production).
+- Accessible via `https://<host>:2663` (по умолчанию самоподписанный HTTPS — см. S7 в `docs/AUDIT.md`).
+- Учётные данные **не имеют дефолта**: `ADMIN_LOGIN` и `ADMIN_PASSWORD` обязательны, иначе `docker compose up` завершается ошибкой.
+- JWT-токен хранится в `localStorage` браузера (см. S8 — httOnly-альтернативы нет).
 
 ### 5.3 Telegram Bot Configuration
 - **User Bot:** Provides end-users with access tokens via `/token` command.
@@ -263,25 +300,45 @@ docker compose up -d --build
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/auth/login` | Login, returns JWT |
-| `POST` | `/auth/refresh` | Refresh JWT token |
-| `POST` | `/auth/logout` | Logout |
+| `POST` | `/auth/change-password` | Change admin password |
+| `POST` | `/auth/register` | Create admin account |
+
+> **`/auth/login` принимает `username`, а не `login`.**
+> Тело: `{"username": "...", "password": "..."}` (`backend/app/schemas.py:12-13`,
+> `AdminLogin`). Поле `login` даёт `422 Validation error` с `missing` по `body.username`.
+> Эндпоинтов `/auth/refresh` и `/auth/logout` **нет** — при истечении TTL клиент
+> логинится заново.
 
 #### Users
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/users/` | List users |
+| `GET` | `/users` | List users (pagination, `search`, `filter`) |
 | `GET` | `/users/{username}` | Get user details |
-| `PATCH` | `/users/{username}` | Update user (speed, premium) |
-| `POST` | `/users/` | Create user |
+| `PUT` | `/users/{username}` | Update user (speed, premium) |
+| `POST` | `/users/{username}/token` | Issue token — **сбрасывает пароль** |
+| `POST` | `/users` | Create user |
 | `DELETE` | `/users/{username}` | Delete user |
+
+> `POST /users/{username}/token` генерирует новый случайный пароль
+> (`routers/users.py:91-92`), поэтому старый пароль перестаёт работать.
 
 #### Servers
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/servers/` | List servers |
-| `POST` | `/servers/` | Add server |
-| `PATCH` | `/servers/{id}` | Update server |
-| `DELETE` | `/servers/{id}` | Delete server |
+| `GET` | `/servers` | List servers, сгруппированные по `regular`/`premium`/`censoredZone` |
+| `POST` | `/servers` | Add server; `kind` в теле: `regular` \| `premium` \| `censored` |
+| `PUT` | `/servers/{kind}/{name}` | Update server fields or rename |
+| `DELETE` | `/servers/{kind}/{name}` | Delete server from given list |
+
+> У серверов **нет** `PATCH /servers/{id}` и `id` в URL.
+> Идентификатор — пара `kind` + `name`, а обновление идёт методом `PUT`.
+
+#### Settings
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/settings` | Get bot settings |
+| `PUT` | `/settings` | Update bot settings |
+| `PUT` | `/settings/bot-enabled` | Enable/disable in-process Telegram bot |
 
 #### Dashboard
 | Method | Endpoint | Description |
@@ -290,29 +347,51 @@ docker compose up -d --build
 
 ### 6.2 Telegram Bot Commands
 
-#### User Bot
+В проекте **два разных бота**, и их нельзя путать.
+
+#### User Bot — встроен в backend (`fptn-admin/backend/app/telegram_bot.py`)
 | Command | Description |
 |---------|-------------|
 | `/start` | Welcome message |
 | `/token` | Generate access token |
-| `/token_mac` | Legacy token command |
+| текст `Get access file` | Тот же обработчик, что `/start` |
 
-#### Admin Bot
+> **Команды `/token_mac` не существует.**
+>
+> **КРИТИЧНО: у этого бота нет проверки прав.** В `telegram_bot.py` нет ни одного
+> обращения к `effective_user`, `telegram_id` или whitelist — хендлеры
+> `CommandHandler("token", ...)` зарегистрированы без фильтра
+> (`telegram_bot.py:168-170`). Любой, кто найдёт бота, выполнит `/token` и получит
+> рабочий access-токен VPN (`telegram_bot.py:100` → `build_access_link`).
+> Защита `ADMIN_IDS` из `fptn-admin-bot/src/bot.py:118` к этому боту **не относится**.
+> См. S11 в `docs/AUDIT.md`.
+
+#### Admin Bot — отдельный стек (`fptn-admin-bot/src/bot.py`)
 | Command | Description |
 |---------|-------------|
-| `/start` | Show main menu |
-| `/menu` | Show main menu |
+| `/start`, `/menu`, `/help` | Show main menu |
 | `/users` | List all users |
 | `/user <username>` | User details |
-| `/create <username> <speed> [premium]` | Create user |
+| `/create` | Create user |
 | `/delete <username>` | Delete user |
 | `/search <query>` | Search users |
-| `/premium <username> <on\|off>` | Toggle premium |
+| `/premium <username>` | Toggle premium |
 | `/speed <username> <Mbps>` | Set speed limit |
 | `/reset <username>` | Reset password |
+| `/token <username>` | Issue token |
+| `/block`, `/unblock` | Block/unblock user |
+| `/batch` | Batch operation |
+| `/broadcast` | Broadcast message |
 | `/status` | Container status |
+| `/stats` | Security stats |
 | `/logs <service>` | Service logs |
 | `/restart <service>` | Restart service |
+| `/backup`, `/backuplist` | Backup management |
+
+> `/logs` и `/restart` принимают **только** имена из `ALLOWED_SERVICES`
+> (`bot.py:63-67`, `is_allowed_service` в `bot.py:128`) — произвольное имя
+> из callback-данных в `docker restart` больше не проходит.
+> Стек `fptn-admin-bot` на VPS **не развёрнут** (монтирует `docker.sock` в `rw`).
 | `/backup` | Create backup |
 | `/block <username>` | Block user |
 | `/unblock <username>` | Unblock user |
@@ -420,11 +499,10 @@ Output:
 
 ### 9.1 Backup
 ```bash
-# Via admin bot
-/backup
-
-# Manual
-tar -czf fptn-backup-$(date +%Y%m%d).tar.gz -C /opt/fptn/fptn/docker-compose fptn-server-data
+# Вручную — так надёжнее, чем команда бота
+sudo mkdir -p /var/backups/fptn
+sudo tar -czf /var/backups/fptn/fptn-config-$(date +%Y%m%d-%H%M%S).tar.gz \
+  -C /opt/fptn-server fptn-server-data
 ```
 
 ### 9.2 Update
@@ -499,19 +577,23 @@ docker run --rm -v $(pwd):/app -w /app python:3.13-slim bash -c "pip install poe
 ### Current Issues (from AUDIT.md)
 | Priority | Issue | Status |
 |----------|-------|--------|
-| P0 | SHA-256 without salt for VPN passwords | Planned migration to Argon2id |
-| P0 | CORS `*` in backend | Should restrict to specific domain |
+| P0 | SHA-256 without salt for VPN passwords | Planned migration to Argon2id — требует синхронной правки C++ |
+| P0 | Password in access token in plaintext | Planned — `vpn_token.py` |
 | P0 | No rate-limit on `/auth/login` | Needs implementation |
 | P0 | JWT in `localStorage` without `httpOnly` | Should use Secure cookies |
+| P0 | In-process Telegram bot has no admin whitelist | **Open** — выдаёт токены любому |
 | P1 | `session.cpp` 1450 lines, cyclomatic 114 | Refactoring planned |
 | P1 | `route_manager.cpp` 1533 lines, no tests | Needs unit tests |
-| P2 | Frontend dependencies outdated (React 18, Vite 4) | Update planned |
+| P2 | Frontend dev dependencies outdated | Update planned; prod deps clean |
 | P2 | No security scanning in CI | Add Trivy/Grype |
 
+> **CORS `*` исправлен** — дефолт стал пустым (`config.py:36`), compose требует
+> явного значения `${CORS_ORIGINS:?...}`. Актуальные статусы: `docs/ROADMAP.md`.
+
 ### Best Practices
-- Change default admin credentials immediately after installation.
+- `ADMIN_LOGIN` / `ADMIN_PASSWORD` обязательны при старте — дефолтов нет.
 - Use HTTPS with valid certificates in production.
-- Restrict `ADMIN_IDS` in admin bot `.env`.
+- `ADMIN_IDS` в `fptn-admin-bot` пустой = бот не стартует (`exit(1)`).
 - Regularly update dependencies and scan for vulnerabilities.
 - Enable firewall (`ufw`) and restrict SSH access.
 

@@ -1,6 +1,8 @@
-## Аудит репозитория fptn-admin
+## Развёртывание FPTN на VPS
 
-> **Контекст:** Документ создан как предварительный аудит `fptn-admin` (монолитный репозиторий `FTPN`). С тех пор в `FTPN/deploy/` появились два варианта развёртывания: полный стек (Docker) и облегчённый `deploy/family/` (systemd-нативный, VPN+бот, опционально панель). Развёртывание через `git clone` ниже — пример для полного варианта; для `family` см. `deploy/family/README.md`.
+> **Актуальность.** Документ частично устарел. Рабочий порядок развёртывания —
+> `AGENTS.md` §4.5 и `docs/DOCUMENTATION.md` §3.2. Каталога `deploy/family/`
+> в репозитории **нет**, варианта «systemd-нативно без Docker» не существует.
 
 ### 1. Общее описание проекта
 
@@ -8,8 +10,8 @@
 
 | Компонент | Стек | Назначение |
 |-----------|------|------------|
-| **Backend** | FastAPI + Poetry + Python 3.13 | REST API, бизнес-логика, Telegram-бот |
-| **Frontend** | React 18.3 + TypeScript 5 + Vite 8 + Tailwind 3.4 | SPA-панель администратора |
+| **Backend** | FastAPI + Poetry + Python 3.13 | REST API, бизнес-логика, встроенный Telegram-бот |
+| **Frontend** | React 18.3 + TypeScript 5.4 + Vite 5.4 + Tailwind 3.4 | SPA-панель администратора |
 
 ---
 
@@ -83,9 +85,10 @@
 
 ## План реализации на удалённом VPS
 
-> **Два варианта развёртывания:**
-> - **Полный стек** (Docker + nginx + Let's Encrypt + Telegram-бот + веб-панель) — этот план ниже.
-> - **Облегчённый `deploy/family/`** (systemd-нативно, без Docker, опционально панель) — для домашнего использования, см. `deploy/family/README.md`.
+> **Вариант развёртывания один — Docker.** Скрипты: `deploy/prereq-install.sh`,
+> `deploy/install.sh` (VPN-сервер), `deploy/install-admin.sh` (панель),
+> `deploy/configure.sh`. Склонировать репозиторий нужно в `/opt/fptn` — скрипты
+> требуют именно этого пути. Подробно: `AGENTS.md` §4.5.
 
 ### 1. Подготовка сервера
 
@@ -151,15 +154,20 @@ sudo certbot --nginx -d admin.example.com
 ### 4. Клонирование и настройка проекта
 
 ```bash
-# Клонирование репозитория (актуальный URL — см. README в корне FTPN)
-# Пример для официального форка: https://github.com/batchar2/fptn
-git clone https://github.com/batchar2/fptn.git
-cd fptn
-# либо, если используется форк с fptn-admin: git clone <ваш-fork-url> fptn-admin && cd fptn-admin
+# Клонировать нужно в /opt/fptn — deploy-скрипты требуют именно этот путь
+git clone https://github.com/ZDarow/FTPN.git /opt/fptn
+cd /opt/fptn
 
-# Создание .env из примера
-cp .env.demo .env
+# Развёртывание
+sudo bash deploy/prereq-install.sh   # Docker, nginx, certbot, UFW
+sudo bash deploy/install.sh          # VPN-сервер
+sudo bash deploy/install-admin.sh    # Панель администратора
 ```
+
+> Клонировать `batchar2/fptn` нельзя: в upstream нет ни `fptn-admin/`, ни
+> `fptn-admin-bot/`. Нужен именно форк `ZDarow/FTPN`.
+>
+> `deploy/uninstall.sh` заканчивается `rm -rf /opt/fptn` — агентам запрещён.
 
 Редактируем `.env`:
 

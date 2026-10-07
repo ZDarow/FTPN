@@ -34,7 +34,7 @@ FTPN/
 ├── fptn-admin/           # Веб-панель (FastAPI + React)
 │   ├── backend/          # Python 3.13, FastAPI 0.115
 │   └── frontend/         # React 18.3 + Vite 5.4 + react-router 7.18
-├── deploy/               # 5 скриптов (см. ниже)
+├── deploy/               # 6 скриптов + lib/ (см. ниже)
 └── docs/                 # Документация
 ```
 

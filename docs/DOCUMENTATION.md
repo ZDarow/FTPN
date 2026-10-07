@@ -44,7 +44,8 @@
    - 6.1. [Часто задаваемые вопросы](#61-часто-задаваемые-вопросы)
    - 6.2. [Типовые проблемы и решения](#62-типовые-проблемы-и-решения)
    - 6.3. [Логи и диагностика](#63-логи-и-диагностика)
-   - 6.4. [Где получить помощь](#64-где-получить-помощь)
+   - 6.4. [Грабли развёртывания — проверено на VPS](#64-грабли-развёртывания--проверено-на-vps)
+   - 6.5. [Где получить помощь](#65-где-получить-помощь)
 
 ---
 
@@ -235,20 +236,34 @@
 
 ```
 FTPN/
-├── fptn/                      # C++ ядро (VPN-сервер + клиент + протокол-библиотека)
+├── fptn/                      # C++20 ядро (VPN-сервер + клиент + протокол-библиотека)
+│   ├── src/                   # common, fptn-server, fptn-client, fptn-protocol-lib, fptn-passwd
+│   ├── tests/                 # gtest
+│   ├── docker-compose/        # compose VPN-сервера
+│   └── sysadmin-tools/        # legacy telegram-bot, grafana
 ├── fptn-admin/                # Web-панель администратора (backend + frontend)
-├── deploy/                    # Скрипты автоматического развёртывания на VPS
-│   ├── deploy.sh              # Главный скрипт (505 строк)
-│   ├── README.md              # Подробная инструкция
-│   ├── systemd/               # 4 unit-файла + healthcheck.timer
-│   └── scripts/               # 9 утилит управления
-├── .sandbox/                  # Локальная изолированная среда для экспериментов
-├── .vscode/                   # Конфигурация VS Code (tasks, launch, clangd)
+├── fptn-admin-bot/            # Отдельный Telegram-бот (docker.sock, НЕ развёрнут на VPS)
+├── deploy/                    # Скрипты развёртывания на VPS
+│   ├── prereq-install.sh      # Docker, nginx, certbot, UFW
+│   ├── install.sh             # VPN-сервер (TUI)
+│   ├── install-admin.sh       # Панель администратора (TUI)
+│   ├── install-bot.sh         # Ставит legacy-бота из fptn/sysadmin-tools/telegram-bot
+│   ├── configure.sh           # Перенастройка .env (TUI)
+│   ├── uninstall.sh           # Удаление, включая rm -rf /opt/fptn
+│   └── lib/                   # tui.sh, install-manager.sh
+├── docs/                      # AUDIT.md, DOCUMENTATION.md, ROADMAP.md, plan.md, links.md
+├── fptn-manager               # gitlink на чужой репозиторий — НЕ редактировать
+├── .vscode/                   # tasks, launch, clangd, рекомендации расширений
 ├── AGENTS.md                  # Гайдлайны для AI-агентов
+├── DOCUMENTATION.md           # Этот документ
 ├── LICENSE                    # Лицензия проекта
-├── README.md                  # Основной README
-└── README_RU.md               # README на русском
+└── README.md                  # Основной README
 ```
+
+> **Каталогов `deploy/deploy.sh`, `deploy/family/`, `deploy/systemd/`, `deploy/scripts/`,
+> `.sandbox/` и файла `README_RU.md` в корне нет.** Реальные deploy-скрипты —
+> шесть файлов выше плюс `lib/`.
+> Развёртывание выполняется из клона в `/opt/fptn` (см. `AGENTS.md` §4.5).
 
 ### 2.2. `fptn/` — C++ ядро
 
@@ -408,7 +423,7 @@ fptn-admin/backend/
 │   ├── routers/
 │   │   ├── auth.py            # POST /auth/login, /change-password
 │   │   ├── users.py           # GET/POST/PUT/DELETE /users, POST /users/{id}/token
-│   │   ├── servers.py         # CRUD /servers, /servers/premium, /servers/censored
+│   │   ├── servers.py         # CRUD /servers и /servers/{kind}/{name}
 │   │   ├── settings.py        # GET/PUT /settings (bot config)
 │   │   └── dashboard.py       # GET /dashboard/highlights, /stats
 │   └── stores/
@@ -432,8 +447,9 @@ fptn-admin/backend/
 - **Файловое хранилище** без БД — использует `fcntl.flock` для межпроцессной блокировки и атомарной записи через `tempfile + os.replace`.
 - **JWT-секрет** персистится в `/etc/fptn/jwt_secret` (chmod 600), генерируется один раз при первом запуске.
 - **Telegram-бот** стартует в фоне через `bot_runner.start()` если `bot_enabled=true` в `bot_settings.json`; останавливается через `bot_runner.stop()`.
-- **First-run seed**: если `admins.json` пустой, создаётся пользователь из `ADMIN_LOGIN`/`ADMIN_PASSWORD` env-переменных; `must_change_password=true` если пароль дефолтный.
-- **CORS** — из env `CORS_ORIGINS` (comma-separated).
+- **First-run seed**: если `admins.json` пустой, создаётся пользователь из `ADMIN_LOGIN`/`ADMIN_PASSWORD` env-переменных; `must_change_password=true` ставится только если пароль буквально равен `admin` (`main.py:26`, `force_change=settings.admin_password == "admin"`).
+- **CORS** — из env `CORS_ORIGINS` (comma-separated). Пустое значение = список origins пуст, то есть CORS-запросы не проходят; дефолт `"*"` снят.
+- **Встроенный Telegram-бот не имеет whitelist** — см. S11 в `docs/AUDIT.md`.
 
 ### 2.4. `fptn-admin/frontend/` — React SPA
 
@@ -778,9 +794,9 @@ npm test
 | Переменная | По умолчанию | Описание |
 |------------|--------------|----------|
 | `JWT_TTL_MINUTES` | 60 | Время жизни JWT в минутах |
-| `ADMIN_LOGIN` | admin | Логин первого админа (только при первом запуске) |
-| `ADMIN_PASSWORD` | admin | Пароль (только при первом запуске) |
-| `CORS_ORIGINS` | * | Через запятую разрешённые origins (в проде — конкретный домен) |
+| `ADMIN_LOGIN` | **нет, обязателен** | Логин первого админа (только при первом запуске) |
+| `ADMIN_PASSWORD` | **нет, обязателен** | Пароль (только при первом запуске) |
+| `CORS_ORIGINS` | `""` (пусто) | Через запятую разрешённые origins; пусто = CORS-запросы не проходят |
 | `ENABLE_BROTLI_COMPRESSION` | false | Сжимать токены через brotli |
 | `FPTN_CONFIGS_FOLDER` | ./compose-data | Путь к общему тому (должен совпадать с VPN-сервером) |
 | `TELEGRAM_TOKEN` | — | Токен бота (только для first-run seed) |
@@ -988,30 +1004,40 @@ Server → Client:
 
 ---
 
-#### `GET /servers` — список обычных серверов
-#### `GET /servers/premium` — премиум-серверы
-#### `GET /servers/censored` — серверы для заблокированных зон
+#### `GET /servers` — все серверы сразу
+
+Отдельных `/servers/premium` и `/servers/censored` **не существует**:
+один маршрут возвращает все три списка сразу.
 
 **Response 200:**
 ```json
 {
-  "servers": [
+  "regular": [
     {
       "name": "Main",
       "host": "1.2.3.4",
       "port": 443,
-      "md5Fingerprint": "",
+      "md5_fingerprint": "",
       "ping": 10
     }
-  ]
+  ],
+  "premium": [],
+  "censoredZone": []
 }
 ```
 
+Обрати внимание на имя ключа — `censoredZone`, а не `censored`.
+Поле отпечатка — `md5_fingerprint` (snake_case), а не `md5Fingerprint`.
+
 ---
 
-#### `POST /servers` / `PUT /servers/{name}` / `DELETE /servers/{name}`
+#### `POST /servers` — добавить сервер
+#### `PUT /servers/{kind}/{name}` — изменить
+#### `DELETE /servers/{kind}/{name}` — удалить
 
-CRUD-операции для серверов.
+`kind` обязателен в пути и принимает `regular` | `premium` | `censored`.
+В теле `POST` поле `kind` тоже нужно: по умолчанию `regular`.
+Изменение — именно `PUT`; `PATCH` в API нет.
 
 ---
 
@@ -1391,11 +1417,12 @@ export async function decodeFptnToken(token: string): Promise<TokenPayload> {
 **Шаги:**
 
 ```bash
-# 1. С локальной машины загружаем проект
-scp -r FTPN root@1.2.3.4:/tmp/
-
-# 2. На сервере открываем порты
+# 1. Клонируем репозиторий в /opt/fptn (скрипты требуют именно этого пути)
 ssh root@1.2.3.4
+git clone https://github.com/ZDarow/FTPN.git /opt/fptn
+cd /opt/fptn
+
+# 2. Открываем порты
 ufw allow 22,443,2663,8080/tcp
 ufw enable
 
@@ -1404,9 +1431,14 @@ dig +short admin.example.com
 # Должно вернуть: 1.2.3.4
 
 # 4. Запускаем развёртывание
-cd /tmp/FTPN
-sudo bash deploy/deploy.sh
+sudo bash deploy/prereq-install.sh   # Docker, nginx, certbot, UFW
+sudo bash deploy/install.sh          # VPN-сервер
+sudo bash deploy/install-admin.sh    # Панель администратора
 ```
+
+> **`sudo bash deploy/deploy.sh` не существует.** Скрипта `deploy/deploy.sh` в
+> репозитории нет. Актуальная последовательность — `AGENTS.md` §4.5.
+> `deploy/uninstall.sh` заканчивается `rm -rf /opt/fptn` и агентам запрещён (§8).
 
 **Интерактивный ввод:**
 
@@ -1449,53 +1481,60 @@ CORS origins (через запятую, или *) [https://admin.example.com]: 
 **Проверка:**
 
 ```bash
-fptn-status
+docker ps
 
-# Контейнеры:
-#   fptn-server                Up 5 minutes
-#   fptn-admin-backend         Up 5 minutes
-#   fptn-admin-frontend        Up 5 minutes
-#   fptn-telegram-bot          Up 5 minutes
+# Ожидаемый вывод:
+#   fptn-server-fptn-server-1                Up 5 minutes (healthy)
+#   fptn-admin-fptn-admin-backend-1          Up 5 minutes (healthy)
+#   fptn-admin-fptn-admin-frontend-1         Up 5 minutes (healthy)
 
 # Проверка из браузера:
 #   https://admin.example.com → реальный сертификат Let's Encrypt ✓
 #   https://1.2.3.4:443       → VPN-туннель работает ✓
 ```
 
+> Утилит `fptn-status` / `fptn-logs` / `fptn-add-user` / `fptn-backup` / `fptn-update`
+> в этом репозитории **нет** — `deploy/*.sh` их не создают. Они относятся к
+> CLI-менеджеру upstream (`batchar2/fptn`). Здесь всё делается через
+> `docker` и REST API панели.
+
 ### 5.2. Сценарий 2 — ежедневная работа администратора
 
 ```bash
-# Проверить общий статус
-fptn-status
+# Общий статус всех контейнеров
+docker ps --format 'table {{.Names}}\t{{.Status}}'
 
-# Посмотреть логи backend
-fptn-logs backend 200
+# Логи панели (реальное имя контейнера — с префиксом проекта)
+docker logs --tail 200 fptn-admin-fptn-admin-backend-1
+docker logs --tail 200 fptn-server-fptn-server-1
 
-# Добавить нового пользователя
-fptn-add-user 987654321 MyP@ssw0rd 50 0
-# [+] Добавлен: 987654321
-#     Логин:   987654321
-#     Пароль:  MyP@ssw0rd
-#     Скорость: 50 Мбит/с
-#     Премиум: 0
-# [+] Токен: fptnb:...
+# Добавить пользователя — только через API, пароль обязателен
+API="http://localhost:8000/api/v1"
+JWT=$(curl -s -X POST "$API/auth/login" -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<пароль>"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Выдать токен существующему пользователю
-fptn-issue-token 123456789
-# fptnb:eyJzb21ldGhpbmci...
+curl -s -X POST "$API/users" -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"987654321","password":"<пароль>","maxSpeed":50,"premiumAccess":false}'
+# Ответ содержит поле token — это и есть готовый access-токен пользователя.
+
+# Перевыпустить токен существующему пользователю
+curl -s -X POST "$API/users/123456789/token" -H "Authorization: Bearer $JWT"
+# ВНИМАНИЕ: перевыпуск токена СБРАСЫВАЕТ пароль пользователя.
 
 # Заблокировать пользователя (скорость = 0)
 # → через UI: Users → выбрать → Edit → maxSpeed=0
+# или PUT /api/v1/users/{username} с {"maxSpeed":0}
 
-# Сделать бэкап
-fptn-backup
-# [+] Бэкап создан: /var/backups/fptn/fptn-config-20260904-120000.tar.gz (2.1K)
+# Сделать бэкап вручную
+sudo mkdir -p /var/backups/fptn
+sudo tar -czf /var/backups/fptn/fptn-config-$(date +%Y%m%d-%H%M%S).tar.gz \
+  -C /opt/fptn-server fptn-server-data
 
 # Обновить до последней версии
-fptn-update
-# [+] Подтягиваю новые образы
-# [+] Перезапускаю стеки
-# [+] Готово.
+cd /opt/fptn-server && sudo docker compose pull && sudo docker compose up -d
+cd /opt/fptn-admin   && sudo docker compose pull && sudo docker compose up -d
 ```
 
 **Через UI (https://admin.example.com):**
@@ -1585,13 +1624,16 @@ curl -X POST "http://localhost:8000/api/v1/users/123456789/token" \
 **Обновление до последней версии:**
 
 ```bash
-sudo fptn-update
-# [+] Подтягиваю новые образы сервера
-# [+] Подтягиваю/пересобираю админ-панель
-# [+] Пересобираю Telegram-бот
-# [+] Перезапускаю стеки
-# [+] Готово.
+# VPN-сервер
+cd /opt/fptn-server && sudo docker compose pull && sudo docker compose up -d
+# Панель
+cd /opt/fptn-admin   && sudo docker compose pull && sudo docker compose up -d
+# Бот (если развёрнут)
+cd /opt/fptn-admin-bot && sudo docker compose pull && sudo docker compose up -d
 ```
+
+> Команды `fptn-update` в этом репозитории нет. Обновление — это обычные
+> `docker compose pull && docker compose up -d` в каждом из каталогов стеков.
 
 **Что происходит:**
 
@@ -1604,7 +1646,7 @@ sudo fptn-update
 
 ```bash
 # Остановить контейнеры
-cd /opt/fptn/compose/server
+cd /opt/fptn-server
 docker compose down
 
 # Восстановить бэкап
@@ -1613,17 +1655,20 @@ LATEST=$(ls -t fptn-config-*.tar.gz | head -1)
 tar -xzf "$LATEST" -C /
 
 # Запустить
-cd /opt/fptn/compose/server && docker compose up -d
-cd /opt/fptn/compose/admin && docker compose up -d
-cd /opt/fptn/compose/bot && docker compose up -d
+cd /opt/fptn-server && docker compose up -d
+cd /opt/fptn-admin   && docker compose up -d
 ```
+
+> Раскладка каталогов: VPN-сервер — `/opt/fptn-server` (свой compose),
+> панель — `/opt/fptn-admin`, бот `fptn-admin-bot` разворачивается отдельно
+> и на этом VPS не установлен.
 
 **Ручной откат на конкретную версию:**
 
 ```bash
 # Временно указать старую версию
-cd /opt/fptn/compose/server
-sed -i 's/image: fptnvpn\/fptn-vpn-server:0.4.4/image: fptnvpn\/fptn-vpn-server:0.4.3/' docker-compose.yml
+cd /opt/fptn-server
+sed -i 's|image: fptnvpn/fptn-vpn-server:0.4.4|image: fptnvpn/fptn-vpn-server:0.4.3|' docker-compose.yml
 docker compose pull
 docker compose up -d
 ```
@@ -1635,13 +1680,14 @@ docker compose up -d
 ```bash
 API="http://localhost:8000/api/v1"
 
-# 1. Логин
+# 1. Логин — поле называется username, не login.
+#    В ответе токен лежит в access_token, не в token.
 JWT=$(curl -s -X POST "$API/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"login":"admin","password":"admin"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+  -d '{"username":"admin","password":"<пароль>"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-echo "JWT: $JWT"
+echo "JWT получен: ${#JWT} символов"
 
 # 2. Список пользователей
 curl -s "$API/users?page=1&pageSize=20" \
@@ -1651,13 +1697,13 @@ curl -s "$API/users?page=1&pageSize=20" \
 curl -s "$API/users?search=123&filter=premium" \
   -H "Authorization: Bearer $JWT" | python3 -m json.tool
 
-# 4. Создать пользователя
+# 4. Создать пользователя — password обязателен (UserCreate)
 curl -s -X POST "$API/users" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
-  -d '{"username":"987654321","maxSpeed":50,"premiumAccess":false}'
+  -d '{"username":"987654321","password":"<пароль>","maxSpeed":50,"premiumAccess":false}'
 
-# 5. Обновить (заблокировать)
+# 5. Обновить (заблокировать) — PUT, не PATCH
 curl -s -X PUT "$API/users/987654321" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
@@ -1669,26 +1715,32 @@ curl -s -X PUT "$API/users/987654321" \
   -H "Content-Type: application/json" \
   -d '{"blocked":false,"premiumAccess":true,"maxSpeed":200}'
 
-# 7. Получить токен
+# 7. Получить access-токен пользователя
 curl -s -X POST "$API/users/987654321/token" \
   -H "Authorization: Bearer $JWT" | python3 -m json.tool
 
-# 8. Удалить
-curl -s -X DELETE "$API/users/987654321" \
-  -H "Authorization: Bearer $JWT" -w "%{http_code}\n"
-
-# 9. Список серверов
+# 8. Список серверов — один маршрут, все три списка сразу.
+#    Ключи ответа: regular, premium, censoredZone (НЕ censored).
+#    Отдельных /servers/premium и /servers/censored не существует.
 curl -s "$API/servers" -H "Authorization: Bearer $JWT" | python3 -m json.tool
-curl -s "$API/servers/premium" -H "Authorization: Bearer $JWT" | python3 -m json.tool
-curl -s "$API/servers/censored" -H "Authorization: Bearer $JWT" | python3 -m json.tool
 
-# 10. Добавить сервер
+# 9. Добавить сервер. Поле отпечатка — md5_fingerprint (snake_case).
 curl -s -X POST "$API/servers" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
-  -d '{"name":"NewServer","host":"2.3.4.5","port":443,"md5Fingerprint":"","ping":15}'
+  -d '{"name":"NewServer","host":"2.3.4.5","port":443,"md5_fingerprint":"","ping":15,"kind":"regular"}'
 
-# 11. Обновить настройки бота
+# 10. Изменить сервер — kind обязателен в пути
+curl -s -X PUT "$API/servers/regular/NewServer" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"ping":20}'
+
+# 11. Удалить сервер
+curl -s -X DELETE "$API/servers/regular/NewServer" \
+  -H "Authorization: Bearer $JWT" -w "%{http_code}\n"
+
+# 12. Настройки бота
 curl -s -X PUT "$API/settings" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
@@ -1701,12 +1753,18 @@ curl -s -X PUT "$API/settings" \
     "welcomeMessageRu":"Привет!"
   }'
 
-# 12. Dashboard
+# 13. Dashboard
 curl -s "$API/dashboard/highlights" -H "Authorization: Bearer $JWT" | python3 -m json.tool
 
-# 13. Healthcheck (без авторизации)
-curl -s "$API/health"
+# 14. Healthcheck — БЕЗ префикса /api/v1 и без авторизации
+curl -s "http://localhost:8000/health"
 ```
+
+> **Удаления VPN-пользователя нет.** В `routers/users.py` определены только
+> `GET /users`, `GET /users/{username}`, `PUT /users/{username}`,
+> `POST /users/{username}/token`, `POST /users`. Маршрута
+> `DELETE /users/{username}` не существует — удалять записи надо вручную
+> в `users.list` на сервере.
 
 **Python-клиент:**
 
@@ -1758,7 +1816,9 @@ print(client.issue_token("123456789"))
 
 #### Q: Как обновить FPTN?
 
-**A:** `sudo fptn-update` — подтянет новые образы из DockerHub и перезапустит контейнеры через systemd.
+**A:** В каждом стеке — `docker compose pull && docker compose up -d`
+(`/opt/fptn-server` для VPN, `/opt/fptn-admin` для панели). Утилиты
+`fptn-update` нет, systemd-юнитов в этом форке тоже нет — всё на Docker Compose.
 
 #### Q: Нужен ли IPv6?
 
@@ -1813,13 +1873,17 @@ FileNotFoundError: [Errno 2] No such file or directory: '/etc/fptn/users.list'
 
 **Решение:**
 ```bash
-# Убедись, что FPTN_CONFIGS_FOLDER указывает на существующую папку
-sudo mkdir -p /opt/fptn/data/fptn-server
-sudo touch /opt/fptn/data/fptn-server/users.list
-# Проверь, что в /opt/fptn/compose/admin/.env:
-#   FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server
-sudo systemctl restart fptn-admin-backend
+# Общий том — то, что проброшено в контейнер как /etc/fptn.
+# На VPS это /opt/fptn-server/fptn-server-data (см. §6.4.3):
+sudo mkdir -p /opt/fptn-server/fptn-server-data
+sudo touch /opt/fptn-server/fptn-server-data/users.list
+# В /opt/fptn-admin/.env должно быть:
+#   FPTN_CONFIGS_FOLDER=/opt/fptn-server/fptn-server-data
+cd /opt/fptn-admin && sudo docker compose up -d
 ```
+
+> Развёртывание панели — это **docker compose** в `/opt/fptn-admin`, а не systemd-юнит.
+> `systemctl restart fptn-admin-backend` в этой схеме не существует.
 
 ---
 
@@ -1836,7 +1900,7 @@ sudo modprobe tun
 echo "tun" | sudo tee /etc/modules-load.d/fptn.conf
 
 # Проверь capabilities в docker-compose
-grep -A 3 "cap_add:" /opt/fptn/compose/server/docker-compose.yml
+grep -A 6 "cap_add:" /opt/fptn-server/docker-compose.yml
 # Должно быть:
 #   cap_add:
 #     - NET_ADMIN
@@ -1847,7 +1911,7 @@ grep -A 3 "cap_add:" /opt/fptn/compose/server/docker-compose.yml
 # devices:
 #   - /dev/net/tun:/dev/net/tun
 
-sudo systemctl restart fptn-server
+cd /opt/fptn-server && sudo docker compose restart
 ```
 
 ---
@@ -1886,7 +1950,8 @@ sudo sysctl -p /etc/sysctl.d/99-fptn.conf
 
 **Диагностика:**
 ```bash
-fptn-logs bot 100
+# Встроенный бот живёт внутри backend — логи там же
+docker logs --tail 100 fptn-admin-fptn-admin-backend-1
 # [ERROR] telegram.error.Unauthorized: Bot token is invalid
 # или
 # [ERROR] ConnectionError: Cannot connect to api.telegram.org
@@ -1914,10 +1979,11 @@ curl -X PUT http://localhost:8000/api/v1/settings \
 
 **Решение:**
 ```bash
-# Проверь, что backend работает
-fptn-status
-# Если fptn-admin-backend не Up:
-sudo systemctl restart fptn-admin-backend
+# Проверь состояние контейнеров панели
+cd /opt/fptn-admin && docker compose ps
+
+# Если backend не Up/healthy — пересоздай стек
+cd /opt/fptn-admin && sudo docker compose up -d
 
 # Проверь сетевую связность между контейнерами
 docker exec fptn-admin-frontend wget -O- http://fptn-admin-backend:8000/health
@@ -2000,14 +2066,14 @@ docker logs --tail 50 fptn-server
 **Решение:**
 ```bash
 # 1. Проверь руками
-sudo /usr/bin/docker ps --filter "name=fptn-admin-backend" --filter "status=running"
-sudo /usr/bin/docker exec fptn-admin-backend python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read())"
+docker ps --filter "name=fptn-admin-backend" --filter "status=running"
+curl -fsS http://127.0.0.1:8000/health
 
-# 2. Если backend контейнер не запущен
-sudo systemctl restart fptn-admin-backend
+# 2. Если контейнер панели не запущен
+cd /opt/fptn-admin && sudo docker compose up -d
 
 # 3. Если /health не отвечает
-sudo /usr/bin/docker logs --tail 20 fptn-admin-backend
+docker logs --tail 20 fptn-admin-fptn-admin-backend-1
 ```
 
 ---
@@ -2035,12 +2101,16 @@ conan install .. --build=boost --build=missing -j 2  # только 2 парал
 
 | Источник | Расположение | Как смотреть |
 |----------|--------------|--------------|
-| Docker-контейнеры | journald | `journalctl -u fptn-server -f` |
-| Docker-контейнеры | stdout/stderr | `docker logs -f fptn-server` |
-| Все контейнеры сразу | утилита | `fptn-logs` |
-| Healthcheck | journald | `journalctl -u fptn-healthcheck -f` |
+| VPN-сервер | stdout/stderr контейнера | `docker logs -f fptn-server-fptn-server-1` |
+| Панель (backend) | stdout/stderr контейнера | `docker logs -f fptn-admin-fptn-admin-backend-1` |
+| Панель (frontend/nginx) | stdout/stderr контейнера | `docker logs -f fptn-admin-fptn-admin-frontend-1` |
+| Встроенный Telegram-бот | логи backend | `docker logs fptn-admin-fptn-admin-backend-1 \| grep -i telegram` |
+| Все контейнеры сразу | stdout/stderr | `docker ps -a --format '{{.Names}}'` + `docker logs` по каждому |
 | Let's Encrypt | /var/log/letsencrypt/ | `cat /var/log/letsencrypt/letsencrypt.log` |
-| nginx (reverse-proxy) | /var/log/nginx/ | `tail -f /var/log/nginx/error.log` |
+| nginx на хосте | /var/log/nginx/ | `tail -f /var/log/nginx/error.log` |
+
+> Утилиты `fptn-logs` нет. Логи всегда в Docker, а не в journald:
+> контейнеры запускаются без systemd-юнитов.
 | Bэкапы | /var/backups/fptn/ | `ls -lh /var/backups/fptn/` |
 
 **Уровни логирования C++:**
@@ -2087,35 +2157,151 @@ sysctl net.ipv4.tcp_congestion_control
 # Должно быть: net.ipv4.tcp_congestion_control = bbr
 ```
 
-### 6.4. Где получить помощь
+### 6.4. Грабли развёртывания — проверено на VPS
+
+Это ошибки, которые **не диагностируются сообщениями об ошибках**: сервер, панель и
+порт выглядят исправными, а подключение всё равно не работает.
+
+#### 6.4.1. Сервер добавлен в `premium` вместо `regular`
+
+**Симптом.** Пользователь не подключается. В панели всё заполнено верно, порт 443
+открыт, `ufw` разрешает, контейнер `healthy`. В логах `fptn-server` нет ни одной
+попытки handshake.
+
+**Причина.** `servers.json` пуст, сервер лежит только в `premium_servers.json`.
+По `backend/app/vpn_token.py:22`:
+
+```python
+servers = premium + regular if is_premium else regular
+```
+
+Не-premium пользователь получает `servers = []` и не имеет ни одного адреса для
+подключения. Панель ошибок не показывает.
+
+**Важно.** Разделения `premium`/`regular` в C++-ядре **нет вообще**:
+`grep -r premium fptn/src/` возвращает пусто. Это только упаковка токена панелью,
+а не разные VPN-серверы. Один сервер на одном порту регистрируется в `regular`.
+
+**Проверка после регистрации** — токен должен содержать непустой `servers`:
+
+```bash
+curl -sk -X POST http://127.0.0.1:8000/api/v1/users/<user>/token \
+  -H "Authorization: Bearer $JWT"
+```
+
+#### 6.4.2. Отпечаток сертификата: MD5, а не SHA1
+
+`fptn/src/fptn-protocol-lib/https/utils/tls/tls.cpp:280-294` считает
+`X509_digest(cert, EVP_md5(), ...)` и форматирует как **lowercase hex без `:`**.
+
+```bash
+# Правильно — MD5 от DER:
+openssl x509 -in /opt/fptn-server/fptn-server-data/server.crt -outform DER | md5sum
+# fc0d1559588409c3f1094f65cb4713e4  <- 32 символа, без разделителей
+# Это то же значение, что в панели: servers.json -> md5_fingerprint
+
+# НЕПРАВИЛЬНО — это SHA1, значение не подойдёт:
+openssl x509 -in server.crt -noout -fingerprint -sha1
+```
+
+Сравнение в клиенте строгое (`fptn/src/fptn-protocol-lib/https/api_client.cpp:1059-1073`),
+поэтому формат с двоеточиями или в верхнем регистре не совпадёт.
+
+#### 6.4.3. Каталог данных VPN-сервера не в репозитории
+
+Работающий compose-проект запускается из `/opt/fptn-server/`, где лежат свои
+`docker-compose.yml`, `.env` и каталог `fptn-server-data/`. Это **не**
+`/opt/FTPN/fptn/docker-compose` и не symlink.
+
+```bash
+docker inspect fptn-server-fptn-server-1 \
+  --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{end}}'
+# /opt/fptn-server/fptn-server-data -> /etc/fptn
+```
+
+Панель пишет в `/opt/fptn-server/fptn-server-data` — это правильно и совпадает с mount.
+Правки `docker-compose.yml` в клоне `/opt/FTPN` на работающий VPN-сервер не влияют.
+
+#### 6.4.4. Токен надо перевыпускать после регистрации сервера
+
+Токен — снимок списка серверов на момент выдачи. Добавление сервера в панели
+**не меняет** уже выданные токены. После регистрации сервера нажмите «Токен»
+у пользователя заново — иначе в клиенте останется пустой список.
+
+При этом `POST /users/{username}/token` **сбрасывает пароль** (`routers/users.py:91-92`),
+старый пароль перестаёт работать.
+
+#### 6.4.5. `fptn:` — это base64, а не brotli
+
+При `ENABLE_BROTLI_COMPRESSION=false` (дефолт, `backend/app/config.py:16`) токены
+выдаются с префиксом `fptn:` в обычном base64. Попытка распаковать такой токен
+через brotli даёт `BrotliDecompress failed`, а добавление padding как для brotli —
+`binascii.Error: Incorrect padding`. Сначала определите префикс, потом декодируйте:
+
+```python
+kind, body = token.split(":", 1)
+raw = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
+payload = brotli.decompress(raw) if kind == "fptnb" else raw
+```
+
+#### 6.4.6. `/auth/login` принимает `username`, а не `login`
+
+```json
+{"username": "admin", "password": "..."}
+```
+
+Поле `login` даёт `422 Validation error` с `missing` по `body.username`.
+
+#### 6.4.7. Встроенный бот выдаёт токены любому
+
+`fptn-admin/backend/app/telegram_bot.py` не проверяет отправителя — ни `effective_user`,
+ни whitelist. Доступ к боту = доступ к VPN. Защита `ADMIN_IDS` из
+`fptn-admin-bot/src/bot.py:118` относится к другому стеку. Подробности — S11 в `docs/AUDIT.md`.
+
+#### 6.4.8. Backend не из интернета
+
+`docker-compose.override.yml` на VPS привязывает backend к `127.0.0.1:8000`;
+наружу смотрит только frontend (`2663`/`8080`). При ручной проверке извне
+`curl https://<ip>:8000` не отвечает — это правильное поведение.
+
+### 6.5. Где получить помощь
 
 **Официальные ресурсы:**
 
-- **GitHub репозиторий:** [github.com/batchar2/fptn](https://github.com/batchar2/fptn)
+- **Форк FTPN (этот репозиторий):** [github.com/ZDarow/FTPN](https://github.com/ZDarow/FTPN)
+- **Upstream:** [github.com/batchar2/fptn](https://github.com/batchar2/fptn)
 - **Сайт проекта / клиенты:** [storage.googleapis.com/fptn.org/](https://storage.googleapis.com/fptn.org/)
-- **CI/CD:** вкладка Actions в GitHub
 
 **Перед тем как спрашивать, собери информацию:**
 
 ```bash
-# Версии
-fptn-status > /tmp/fptn-status.txt
-docker --version >> /tmp/fptn-status.txt
-docker compose version >> /tmp/fptn-status.txt
-cat /etc/os-release >> /tmp/fptn-status.txt
-uname -a >> /tmp/fptn-status.txt
+OUT=/tmp/fptn-diag.txt
+
+# Версии и состояние
+docker --version            >  $OUT
+docker compose version      >> $OUT
+cat /etc/os-release         >> $OUT
+uname -a                    >> $OUT
+docker ps -a                >> $OUT
 
 # Логи
-fptn-logs server 500 > /tmp/fptn-logs.txt
-fptn-logs backend 500 >> /tmp/fptn-logs.txt
+docker logs --tail 500 fptn-server-fptn-server-1          >  /tmp/fptn-logs.txt
+docker logs --tail 500 fptn-admin-fptn-admin-backend-1   >> /tmp/fptn-logs.txt
 
-# Конфигурация
-cat /opt/fptn/deploy-config.env > /tmp/fptn-config.txt
-docker network inspect fptn-network >> /tmp/fptn-config.txt
+# Конфигурация (БЕЗ секретов!)
+docker network inspect fptn-network > /tmp/fptn-config.txt
+# /opt/fptn-admin/.env НЕ прикладывай: там ADMIN_PASSWORD и токен бота.
+# Из .env можно показать только безопасные ключи:
+grep -E '^(CORS_ORIGINS|ENABLE_BROTLI_COMPRESSION|FPTN_CONFIGS_FOLDER|JWT_TTL_MINUTES)' \
+  /opt/fptn-admin/.env >> /tmp/fptn-config.txt
 
 # Архив для отправки
-tar -czf /tmp/fptn-diagnostics.tar.gz /tmp/fptn-*.txt
+tar -czf /tmp/fptn-diagnostics.tar.gz $OUT /tmp/fptn-logs.txt /tmp/fptn-config.txt
 ```
+
+> ⚠️ **Никогда не прикладывай** `users.list`, `admins.json`, `bot_settings.json`,
+> `jwt_secret`, `server.key` и `.env` целиком — там пароли, хеши и токен бота.
+> `bot_settings.json` содержит Telegram-токен в открытом виде.
 
 **При сообщении об ошибке укажи:**
 
@@ -2123,8 +2309,9 @@ tar -czf /tmp/fptn-diagnostics.tar.gz /tmp/fptn-*.txt
 2. Версия Docker
 3. Что делал, когда произошла ошибка
 4. Полные логи (не выжимка)
-5. Результат `fptn-status`
-6. Любые изменения в `/opt/fptn/deploy-config.env` или `.env` файлах
+5. Полные логи (приложенный архив)
+6. Любые изменения в `/opt/fptn-admin/.env` или `.env` файлах —
+   **замаскируй `ADMIN_PASSWORD` и `TELEGRAM_TOKEN`**, остальное можно показать.
 
 **Полезные каналы сообщества:**
 
@@ -2176,19 +2363,30 @@ tar -czf /tmp/fptn-diagnostics.tar.gz /tmp/fptn-*.txt
 
 | Файл / каталог | Права | Владелец | Зачем |
 |----------------|-------|----------|-------|
-| `/opt/fptn/` | 755 | root | Корневая папка |
-| `/opt/fptn/data/` | 750 | root | Данные |
-| `/opt/fptn/data/fptn-server/` | 750 | root | Общий том конфигов |
-| `/opt/fptn/data/fptn-server/users.list` | 644 | root | Список пользователей |
-| `/opt/fptn/data/fptn-server/admins.json` | 600 | root | Хеши паролей админов |
-| `/opt/fptn/data/fptn-server/jwt_secret` | 600 | root | Секрет JWT |
-| `/opt/fptn/data/fptn-server/bot_settings.json` | 644 | root | Настройки бота |
-| `/opt/fptn/deploy-config.env` | 600 | root | Конфиг развёртывания |
-| `/opt/fptn/compose/*/.env` | 600 | root | Docker-конфиги |
-| `/opt/fptn/compose/*/fullchain.pem` | 644 | root | TLS-сертификат |
-| `/opt/fptn/compose/*/privkey.pem` | 600 | root | TLS-ключ |
+| `/opt/fptn/` | 755 | root | Клон репозитория |
+| `/opt/fptn-server/` | 755 | root | Отдельный compose VPN-сервера |
+| `/opt/fptn-server/docker-compose.yml` | 644 | root | Конфигурация VPN |
+| `/opt/fptn-server/fptn-server-data/` | 755 | root | Общий том, монтируется в контейнер как `/etc/fptn` |
+| `…/fptn-server-data/users.list` | 600 | root | Список VPN-пользователей и хеши паролей |
+| `…/fptn-server-data/admins.json` | 600 | root | Хеши паролей админов панели |
+| `…/fptn-server-data/jwt_secret` | 600 | root | Секрет подписи JWT |
+| `…/fptn-server-data/bot_settings.json` | 600 | root | Telegram-токен и настройки встроенного бота |
+| `…/fptn-server-data/server.key` | 600 | root | Приватный ключ TLS |
+| `…/fptn-server-data/server.crt` | 644 | root | Сертификат TLS |
+| `…/fptn-server-data/servers.json` | 644 | root | Список regular-серверов (его читает C++-сервер) |
+| `…/fptn-server-data/premium_servers.json` | 644 | root | Список premium-серверов |
+| `…/fptn-server-data/blacklist.txt` | 644 | root | Доменный blacklist |
+| `/opt/fptn-admin/` | 750 | root | Compose панели |
+| `/opt/fptn-admin/.env` | 600 | root | `ADMIN_LOGIN`, `ADMIN_PASSWORD`, CORS |
+| `/opt/fptn-admin/docker-compose.override.yml` | 600 | root | Локальный override панели |
 | `/var/backups/fptn/` | 700 | root | Бэкапы |
-| `/usr/local/bin/fptn-*` | 755 | root | Утилиты |
+
+> `censored_servers.json` может отсутствовать — это норма: пустой список
+> C++-сервер трактует так же, как отсутствие файла.
+>
+> Права `600` на `users.list`, `admins.json`, `bot_settings.json` и `jwt_secret`
+> обязательны: `bot_settings.json` содержит бота в открытом виде, а `users.list`
+> и `admins.json` — хеши паролей.
 
 ---
 

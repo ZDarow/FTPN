@@ -102,11 +102,11 @@ You only need one thing on your computer or server:
 
 5. **Log in**
 
-   - Login: `admin`
-   - Password: `admin`
+   - Login: the `ADMIN_LOGIN` value you set in `.env`
+   - Password: the `ADMIN_PASSWORD` value you set in `.env`
 
-   You'll be asked to set a new password immediately — that's intentional,
-   so nobody is left running with the default one.
+   There is **no default** — `docker compose up` refuses to start unless both are
+   set (`${ADMIN_LOGIN:?}` / `${ADMIN_PASSWORD:?}` in `docker-compose.yml`).
 
 That's it — you're in.
 
@@ -155,10 +155,10 @@ fptn C++ server and this project's own Telegram bot. One line per user:
 
 Panel admins (JWT login) are unrelated to VPN users and live in a separate
 `admins.json` (bcrypt-hashed passwords). On an empty store the first admin is
-seeded from `ADMIN_LOGIN` / `ADMIN_PASSWORD` (default `admin` / `admin`,
-Grafana-style). While the default password is in use, `login` returns
-`mustChangePassword: true` — the frontend forces the change-password form
-before letting the admin in.
+seeded from `ADMIN_LOGIN` / `ADMIN_PASSWORD`, both of which are **required** —
+there is no default, and `docker compose up` fails without them. If the password
+is literally `admin`, `login` returns `mustChangePassword: true` and the frontend
+forces the change-password form before letting the admin in.
 
 ### API
 
