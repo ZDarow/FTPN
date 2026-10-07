@@ -60,10 +60,8 @@ err()  { echo -e "\033[0;31m[✗]\033[0m $*" >&2; }
 
 set_env_var() {
   local key="$1" value="$2"
-  # Экранируем /, &, | для sed
-  local esc="${value//\//\\/}"
-  esc="${esc//&/\&}"
-  esc="${esc//|/\|}"
+  local esc
+  esc=$(printf '%s\n' "$value" | sed 's/[][\.^$*+?{}()|/&]/\\&/g')
   if grep -qE "^${key}=" "$ENV_FILE"; then
     sed -i "s|^${key}=.*|${key}=${esc}|" "$ENV_FILE"
   else

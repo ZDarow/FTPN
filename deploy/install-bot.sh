@@ -85,15 +85,15 @@ if ! tui_yesno "Подтверждение" "Применить эти наст�
 fi
 
 # ---- Запись ----
-cat > "$ENV_FILE" <<EOF
-TELEGRAM_API_TOKEN=$TG_INPUT
-FPTN_WELCOME_MESSAGE_EN="$WELCOME_EN"
-FPTN_WELCOME_MESSAGE_RU="$WELCOME_RU"
-MAX_USER_SPEED_LIMIT=$SPEED_INPUT
-SERVICE_NAME=FPTN.ONLINE
-ENABLE_BROTLI_COMPRESSION=true
-FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server
-EOF
+{
+  printf 'TELEGRAM_API_TOKEN=%s\n' "$TG_INPUT"
+  printf 'FPTN_WELCOME_MESSAGE_EN=%s\n' "$WELCOME_EN"
+  printf 'FPTN_WELCOME_MESSAGE_RU=%s\n' "$WELCOME_RU"
+  printf 'MAX_USER_SPEED_LIMIT=%s\n' "$SPEED_INPUT"
+  printf 'SERVICE_NAME=FPTN.ONLINE\n'
+  printf 'ENABLE_BROTLI_COMPRESSION=true\n'
+  printf 'FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server\n'
+} > "$ENV_FILE"
 
 cd /opt/fptn/fptn/sysadmin-tools/telegram-bot
 docker compose up -d --build

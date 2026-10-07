@@ -35,14 +35,13 @@ for arg in "$@"; do
     --with-cpp)    INSTALL_CPP_BUILD=true ;;
     --without-cpp) INSTALL_CPP_BUILD=false ;;
     --admin-login=*) ADMIN_LOGIN="${arg#*=}" ;;
-    --admin-password=*) ADMIN_PASSWORD="${arg#*=}" ;;
     --domain=*) DOMAIN="${arg#*=}" ;;
     -h|--help)
-      echo "Использование: $0 [--with-cpp] [--admin-login admin] [--admin-password pass] [--domain example.com]"
+      echo "Использование: $0 [--with-cpp] [--admin-login admin] [--domain example.com]"
       echo "  --with-cpp          дополнительно ставит toolchain для сборки C++"
       echo "  --admin-login       логин админа (по умолчанию: admin)"
-      echo "  --admin-password    пароль админа (минимум 8 символов, по умолчанию: случайный)"
       echo "  --domain            домен/IP для админки (по умолчанию: auto-detect)"
+      echo "  Пароль админа генерируется автоматически или берётся из FPTN_ADMIN_PASSWORD"
       exit 0
       ;;
   esac
@@ -103,10 +102,12 @@ VPN_DATA="$INSTALL_DIR/fptn/docker-compose/fptn-server-data"
 mkdir -p "$VPN_DATA"
 if [[ ! -f "$VPN_DATA/server.crt" || ! -f "$VPN_DATA/server.key" ]]; then
   say "[3/6] Генерирую SSL-сертификаты для VPN..."
+  umask 077
   openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
     -keyout "$VPN_DATA/server.key" \
     -out "$VPN_DATA/server.crt" \
     -subj "/CN=$PUBLIC_IP" 2>/dev/null
+  chmod 600 "$VPN_DATA/server.key"
   say "  Сертификаты: $VPN_DATA/server.crt, $VPN_DATA/server.key"
 else
   say "[3/6] SSL-сертификаты уже существуют, пропускаю"
@@ -130,27 +131,29 @@ if [[ -z "$DOMAIN" ]]; then
 fi
 
 # Пароль админа
-if [[ -z "$ADMIN_PASSWORD" ]]; then
-  ADMIN_PASSWORD=$(openssl rand -base64 16 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "admin1234")
+if [[ -n "${FPTN_ADMIN_PASSWORD:-}" ]]; then
+  ADMIN_PASSWORD="$FPTN_ADMIN_PASSWORD"
+else
+  ADMIN_PASSWORD=$(openssl rand -base64 16 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null)
 fi
 
 # Создаём .env для панели
 ADMIN_ENV="$INSTALL_DIR/fptn-admin/.env"
 mkdir -p "$INSTALL_DIR/fptn-admin"
-cat > "$ADMIN_ENV" <<EOF
-JWT_TTL_MINUTES=60
-ADMIN_LOGIN=$ADMIN_LOGIN
-ADMIN_PASSWORD=$ADMIN_PASSWORD
-CORS_ORIGINS=https://$DOMAIN:2663
-ENABLE_BROTLI_COMPRESSION=true
-FPTN_CONFIGS_FOLDER=$VPN_DATA
-TELEGRAM_TOKEN=
-BOT_ENABLED=false
-SERVICE_NAME=fptn
-MAX_USER_SPEED_LIMIT=30
-WELCOME_MESSAGE_EN=
-WELCOME_MESSAGE_RU=
-EOF
+{
+  printf 'JWT_TTL_MINUTES=60\n'
+  printf 'ADMIN_LOGIN=%s\n' "$ADMIN_LOGIN"
+  printf 'ADMIN_PASSWORD=%s\n' "$ADMIN_PASSWORD"
+  printf 'CORS_ORIGINS=https://%s:2663\n' "$DOMAIN"
+  printf 'ENABLE_BROTLI_COMPRESSION=true\n'
+  printf 'FPTN_CONFIGS_FOLDER=%s\n' "$VPN_DATA"
+  printf 'TELEGRAM_TOKEN=\n'
+  printf 'BOT_ENABLED=false\n'
+  printf 'SERVICE_NAME=fptn\n'
+  printf 'MAX_USER_SPEED_LIMIT=30\n'
+  printf 'WELCOME_MESSAGE_EN=\n'
+  printf 'WELCOME_MESSAGE_RU=\n'
+} > "$ADMIN_ENV"
 chmod 600 "$ADMIN_ENV"
 say "  $ADMIN_ENV создан"
 

@@ -77,21 +77,24 @@ async def _get_access_token(update: Update, _: CallbackContext) -> None:
     messages = _MESSAGES[_language(update)]
     username = f"user{update.message.from_user.id}"
     data = bot_settings_store.get()
-    password = generate_password()
 
     rec = vpn_store.get(username)
     if rec is None:
-        rec = vpn_store.create(username, password, data.max_user_speed_limit, False)
-        status_message = messages["status_registered"]
-    else:
-        rec = vpn_store.set_password(username, password)
-        status_message = messages["status_reset"]
+        await _reply(
+            update,
+            "Вы не зарегистрированы в VPN. Обратитесь к администратору.",
+            disable_web_page_preview=True,
+        )
+        return
+
+    password = generate_password()
+    rec = vpn_store.set_password(username, password)
+    status_message = messages["status_reset"]
 
     servers = server_store.list()
     token = build_token(
         service_name=data.service_name,
         username=username,
-        password=password,
         is_premium=rec.is_premium,
         regular=servers["regular"],
         premium=servers["premium"],

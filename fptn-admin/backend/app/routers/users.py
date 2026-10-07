@@ -17,12 +17,11 @@ def _to_user(rec: VpnRecord) -> VpnUser:
     return VpnUser(username=rec.username, blocked=rec.blocked, premiumAccess=rec.is_premium, maxSpeed=rec.speed)
 
 
-def _issue_token(username: str, password: str, is_premium: bool) -> str:
+def _issue_token(username: str, is_premium: bool) -> str:
     servers = server_store.list()
     payload = build_token(
         service_name=bot_settings_store.get().service_name,
         username=username,
-        password=password,
         is_premium=is_premium,
         regular=servers["regular"],
         premium=servers["premium"],
@@ -90,7 +89,7 @@ def issue_token(username: str) -> UserToken:
         raise UserNotFound(username)
     password = generate_password()
     vpn_store.set_password(username, password)
-    token = _issue_token(username, password, rec.is_premium)
+    token = _issue_token(username, rec.is_premium)
     return UserToken(token=token)
 
 
@@ -104,7 +103,7 @@ def issue_token(username: str) -> UserToken:
 def create_user(body: UserCreate) -> UserCreated:
     max_speed = body.maxSpeed if body.maxSpeed is not None else bot_settings_store.get().max_user_speed_limit
     rec = vpn_store.create(body.username, body.password, max_speed, body.premiumAccess)
-    token = _issue_token(rec.username, body.password, rec.is_premium)
+    token = _issue_token(rec.username, rec.is_premium)
     return UserCreated(
         username=rec.username,
         blocked=rec.blocked,

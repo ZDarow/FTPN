@@ -14,7 +14,6 @@ def build_token(
     *,
     service_name: str,
     username: str,
-    password: str,
     is_premium: bool,
     regular: list[dict],
     premium: list[dict],
@@ -25,7 +24,6 @@ def build_token(
         "version": 1,
         "service_name": service_name,
         "username": username,
-        "password": password,
         "servers": servers,
         "censored_zone_servers": censored,
     }

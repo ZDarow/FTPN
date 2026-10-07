@@ -7,6 +7,7 @@ Distributed under the MIT License (https://opensource.org/licenses/MIT)
 #pragma once
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -147,15 +148,24 @@ class CommonUserManager final {
   }
 
   void SaveUsers() const {
-    std::ofstream file(file_path_);
-    if (file.is_open()) {
-      for (const auto& user_entry : users_) {
-        const auto& username = user_entry.first;
-        const auto& [hash_password, max_speed] = user_entry.second;  // NOLINT
-        file << username << " " << hash_password << " " << max_speed << "\n";
+    const std::string tmp_path = file_path_ + ".tmp";
+    {
+      std::ofstream file(tmp_path);
+      if (file.is_open()) {
+        for (const auto& user_entry : users_) {
+          const auto& username = user_entry.first;
+          const auto& [hash_password, max_speed] = user_entry.second;  // NOLINT
+          file << username << " " << hash_password << " " << max_speed << "\n";
+        }
+      } else {
+        std::cerr << "Unable to open file: " << tmp_path << std::endl;
+        return;
       }
-    } else {
-      std::cerr << "Unable to open file: " << file_path_ << std::endl;
+    }
+    std::error_code ec;
+    std::rename(tmp_path.c_str(), file_path_.c_str());
+    if (ec) {
+      std::cerr << "Failed to rename temp file: " << ec.message() << std::endl;
     }
   }
 

@@ -129,20 +129,20 @@ if ! tui_yesno "Подтверждение" "Применить эти наст�
 fi
 
 # ---- Запись ----
-cat > "$ENV_FILE" <<EOF
-JWT_TTL_MINUTES=60
-ADMIN_LOGIN=$LOGIN_INPUT
-ADMIN_PASSWORD=$PASS_INPUT
-CORS_ORIGINS=https://$HOST_INPUT
-ENABLE_BROTLI_COMPRESSION=true
-FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server
-TELEGRAM_TOKEN=$TG_INPUT
-BOT_ENABLED=$BOT_ENABLED
-SERVICE_NAME=FPTN.ONLINE
-MAX_USER_SPEED_LIMIT=$SPEED_INPUT
-WELCOME_MESSAGE_EN="$WELCOME_EN"
-WELCOME_MESSAGE_RU="$WELCOME_RU"
-EOF
+{
+  printf 'JWT_TTL_MINUTES=60\n'
+  printf 'ADMIN_LOGIN=%s\n' "$LOGIN_INPUT"
+  printf 'ADMIN_PASSWORD=%s\n' "$PASS_INPUT"
+  printf 'CORS_ORIGINS=https://%s\n' "$HOST_INPUT"
+  printf 'ENABLE_BROTLI_COMPRESSION=true\n'
+  printf 'FPTN_CONFIGS_FOLDER=/opt/fptn/data/fptn-server\n'
+  printf 'TELEGRAM_TOKEN=%s\n' "$TG_INPUT"
+  printf 'BOT_ENABLED=%s\n' "$BOT_ENABLED"
+  printf 'SERVICE_NAME=FPTN.ONLINE\n'
+  printf 'MAX_USER_SPEED_LIMIT=%s\n' "$SPEED_INPUT"
+  printf 'WELCOME_MESSAGE_EN=%s\n' "$WELCOME_EN"
+  printf 'WELCOME_MESSAGE_RU=%s\n' "$WELCOME_RU"
+} > "$ENV_FILE"
 
 # В файле лежат пароль администратора и Telegram-токен: только root.
 chmod 600 "$ENV_FILE"
@@ -158,12 +158,12 @@ docker compose up -d --build
 # Кладём рядом с .env отдельным файлом с правами root-only.
 CREDS_FILE="/root/fptn-admin-panel.pass"
 umask 077
-cat > "$CREDS_FILE" <<EOF
-FPTN admin panel
-URL:    http://<server>:2663 (или https://$HOST_INPUT:2663)
-Login:  $LOGIN_INPUT
-Password: $PASS_INPUT
-EOF
+{
+  printf 'FPTN admin panel\n'
+  printf 'URL:    http://<server>:2663 (или https://%s:2663)\n' "$HOST_INPUT"
+  printf 'Login:  %s\n' "$LOGIN_INPUT"
+  printf 'Password: %s\n' "$PASS_INPUT"
+} > "$CREDS_FILE"
 chmod 600 "$CREDS_FILE"
 
 cat <<EOF

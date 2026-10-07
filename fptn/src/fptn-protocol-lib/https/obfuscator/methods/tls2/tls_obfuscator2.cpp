@@ -74,20 +74,20 @@ bool IsValidTimestamp(const std::uint32_t timestamp) {
 }
 
 std::uint64_t GetRandomData() {
-  static std::mt19937 gen{std::random_device {}()};
+  thread_local static std::mt19937 gen{std::random_device {}()};
   std::uniform_int_distribution<std::uint64_t> dist(1024, UINT64_MAX);
   return dist(gen);
 }
 
 std::uint8_t GetRandomByte(
     const std::uint8_t min = 0, const std::uint8_t max = UINT8_MAX) {
-  static std::mt19937 gen{std::random_device {}()};
+  thread_local static std::mt19937 gen{std::random_device {}()};
   std::uniform_int_distribution<std::uint16_t> dist(min, max);
   return static_cast<std::uint8_t>(dist(gen));
 }
 
 std::uint16_t GetRandomPaddingLength() {
-  static std::mt19937 gen{std::random_device {}()};
+  thread_local static std::mt19937 gen{std::random_device {}()};
   std::uniform_int_distribution<std::uint16_t> dist(4095, 8192);
   return dist(gen);
 }

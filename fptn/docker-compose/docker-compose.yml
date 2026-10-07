@@ -2,13 +2,17 @@ services:
   fptn-server:
     restart: unless-stopped
     image: fptnvpn/fptn-vpn-server:0.4.4
-    privileged: true
+    privileged: false
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
       - NET_RAW
-      - SYS_ADMIN
-      - SYS_RESOURCE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
     sysctls:
       net.ipv4.ip_local_port_range: "6890 65535"
       # These are per-network-namespace: setting them on the host does not

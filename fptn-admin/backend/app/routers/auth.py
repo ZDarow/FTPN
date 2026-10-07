@@ -4,8 +4,25 @@ from app.deps import admin_store
 from app.schemas import AdminCreate, AdminLogin, AdminOut, ChangePassword, TokenResponse
 from app.security import create_access_token, get_current_admin
 
-
 router = APIRouter(tags=["auth"])
+
+_login_attempts: dict[str, list[float]] = {}
+_MAX_ATTEMPTS = 5
+_WINDOW_SECONDS = 60
+
+
+def _check_rate_limit(identifier: str) -> None:
+    import time
+
+    now = time.time()
+    attempts = _login_attempts.get(identifier, [])
+    _login_attempts[identifier] = [t for t in attempts if now - t < _WINDOW_SECONDS]
+    if len(_login_attempts[identifier]) >= _MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Try again later.",
+        )
+    _login_attempts[identifier].append(now)
 
 
 @router.post(
@@ -15,6 +32,7 @@ router = APIRouter(tags=["auth"])
     description="Exchange admin credentials for a JWT. `mustChangePassword` is true while the default password stands.",
 )
 def login(body: AdminLogin) -> TokenResponse:
+    _check_rate_limit(body.username)
     if not admin_store.authenticate(body.username, body.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return TokenResponse(
