@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import json
 import threading
 import time
@@ -131,7 +132,7 @@ def test_get_access_token_resets_an_existing_user_with_a_new_password():
     # Пароль больше не входит в токен; проверяем, что он сброшен в хранилище.
     rec = vpn_store.get("user777")
     assert rec is not None
-    assert rec.password != "initial-pw"
+    assert rec.password_hash != hashlib.sha256("initial-pw".encode()).hexdigest()
 
 
 def test_get_access_token_premium_user_gets_premium_servers():
