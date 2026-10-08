@@ -13,6 +13,11 @@ services:
     tmpfs:
       - /run
       - /tmp
+      # fptn-server пишет логи в /var/log/fptn/ (logger.h:58,
+      # путь захардкожен, переменной окружения нет) — без
+      # writable-локации сервер падает при старте:
+      # "Failed to create log directory: Read-only file system"
+      - /var/log/fptn
     sysctls:
       net.ipv4.ip_local_port_range: "6890 65535"
       # These are per-network-namespace: setting them on the host does not
