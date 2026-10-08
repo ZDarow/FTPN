@@ -119,6 +119,7 @@ def test_issue_token_resets_password(client, auth):
     assert data["username"] == "100"
     # Пароль больше не входит в токен; проверяем, что он сброшен в хранилище.
     from app.deps import vpn_store
+
     rec = vpn_store.get("100")
     assert rec is not None
     assert rec.password_hash != hashlib.sha256("pw".encode()).hexdigest()
