@@ -31,7 +31,10 @@
     "nanoid": "^5.0.9",
     "picomatch": "^4.0.3",
     "rollup": "^4.30.0",
-    "semver": "^7.6.4"
+    "semver": "^7.6.4",
+    "tinypool": "^2.2.0",
+    "source-map-js": "^1.2.2",
+    "postcss-selector-parser": "^7.1.6"
   },
   "dependencies": {
     "brotli-wasm": "^3.0.1",
