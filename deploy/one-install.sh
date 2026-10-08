@@ -153,6 +153,7 @@ say "Добавить сервер: $ADD_SERVER"
 # ---- 1.6. Telegram-бот ----
 TG_ENABLED="no"
 TG_TOKEN=""
+TG_ADMIN_IDS=""
 if tui_yesno "Шаг 6/6 — Telegram-бот" "Включить Telegram-бота?\n\nБот управляет пользователями через /token,\nвыдаёт ссылки и удаляет аккаунты."; then
   TG_ENABLED="yes"
   while true; do
@@ -163,6 +164,15 @@ if tui_yesno "Шаг 6/6 — Telegram-бот" "Включить Telegram-бот�
     tui_info "Ошибка" "Некорректный формат токена.\nПример: 1234567890:AAHfiqksKZ8WmR2zMnGOEjFyjPwKjOq7EXAMPLE"
   done
   say "Telegram-бот: включён"
+  # ADMIN_IDS — белый список Telegram User ID, которым разрешено
+  # управлять ботом. При пустом значении is_admin() возвращает True
+  # для ЛЮБОГО пользователя — бот станет публично управляемым.
+  TG_ADMIN_IDS=$(tui_input "Telegram Admin ID" "Ваш Telegram User ID (узнать у @userinfobot).\nПусто = бот доступен ЛЮБОМУ пользователю (небезопасно):" "") || true
+  if [[ -n "$TG_ADMIN_IDS" ]]; then
+    say "Telegram Admin ID: $TG_ADMIN_IDS"
+  else
+    warn "ADMIN_IDS не задан — бот сможет контролировать ЛЮБОЙ Telegram-аккаунт!"
+  fi
 else
   say "Telegram-бот: отключён"
 fi
@@ -286,7 +296,11 @@ say "[4/5] Настраиваю админ-панель..."
   printf 'ENABLE_BROTLI_COMPRESSION=true\n'
   printf 'FPTN_CONFIGS_FOLDER=%s\n' "$VPN_DATA"
   printf 'TELEGRAM_TOKEN=%s\n' "$TG_TOKEN"
-  printf 'BOT_ENABLED=%s\n' "$TG_ENABLED"
+  # Встроенный бот backend НЕ запускаем: тот же токен используется
+  # отдельным стеком fptn-admin-bot, а два long-poller'а на одном
+  # токене дают 409 Conflict. Управление — через отдельный стек,
+  # в нём есть проверка ADMIN_IDS (у встроенного бота её нет).
+  printf 'BOT_ENABLED=false\n'
   printf 'SERVICE_NAME=fptn\n'
   printf 'MAX_USER_SPEED_LIMIT=%s\n' "$MAX_SPEED"
   printf 'WELCOME_MESSAGE_EN=\n'
@@ -299,42 +313,58 @@ say "  $ADMIN_ENV создан"
 if [[ "$ADD_SERVER" == "yes" ]]; then
   say "  Добавляю текущий сервер в список..."
   mkdir -p "$VPN_DATA"
-  # Инициализируем servers.json если нет
-  if [[ ! -f "$VPN_DATA/servers.json" ]]; then
-    echo '{"regular":[],"premium":[],"censored":[]}' > "$VPN_DATA/servers.json"
-  fi
-  # Добавляем сервер через Python (идемпотентно)
+  # ServerStore хранит КАЖДЫЙ файл (servers.json, premium_servers.json,
+  # servers_censored_zone.json) как JSON-список объектов ServerModel:
+  #   [{"name":..., "host":..., "port":..., "md5_fingerprint":"", "ping":0}]
+  # Словарь {"regular":[...]} не распознаётся (_read вернёт []) —
+  # сервер молча не добавится. Поэтому пишем списки.
   python3 - <<'PYEOF' "$VPN_DATA" "$HOST_INPUT" "$VPN_PORT"
-import json, sys
+import json
+import sys
 from pathlib import Path
 
 data_dir = Path(sys.argv[1])
 host = sys.argv[2]
 port = int(sys.argv[3])
 
-regular_file = data_dir / "servers.json"
-premium_file = data_dir / "premium_servers.json"
-censored_file = data_dir / "servers_censored_zone.json"
+files = {
+    "regular": data_dir / "servers.json",
+    "premium": data_dir / "premium_servers.json",
+    "censored": data_dir / "servers_censored_zone.json",
+}
 
-# Инициализация файлов
-for f in [regular_file, premium_file, censored_file]:
-    if not f.exists():
-        f.write_text('{"regular":[],"premium":[],"censored":[]}')
 
-def load(path):
-    return json.loads(path.read_text())
+def load(path: Path) -> list:
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8") or "[]")
+    except json.JSONDecodeError:
+        return []
+    return raw if isinstance(raw, list) else []
 
-def save(path, data):
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
-# Добавляем в regular
-regular = load(regular_file)
-entry = {"host": host, "port": port, "name": f"Server-{host}"}
-if entry not in regular.get("regular", []):
-    regular.setdefault("regular", []).append(entry)
-    save(regular_file, regular)
+entry = {
+    "name": f"Server-{host}",
+    "host": host,
+    "port": port,
+    "md5_fingerprint": "",
+    "ping": 0,
+}
+
+regular = load(files["regular"])
+if not any(s.get("name") == entry["name"] for s in regular):
+    regular.append(entry)
+    files["regular"].write_text(
+        json.dumps(regular, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+# Инициализируем пустые списки для остальных зон, если файлов нет
+for key in ("premium", "censored"):
+    if not files[key].exists():
+        files[key].write_text("[]", encoding="utf-8")
 PYEOF
-  say "  Сервер обработан: $HOST_INPUT:$VPN_PORT"
+  say "  Сервер добавлен: $HOST_INPUT:$VPN_PORT"
 fi
 
 # Сборка и запуск панели
@@ -350,46 +380,28 @@ BOT_INSTALLED="нет"
 if [[ "$TG_ENABLED" == "yes" ]]; then
   hr
   say "[5/5] Устанавливаю Telegram-бота..."
-  # Используем новый стек fptn-admin-bot
+  # Используем готовый стек из репозитория (fptn-admin-bot/docker-compose.yml).
+  # ВАЖНО: compose и bot/config.py читают TELEGRAM_API_TOKEN и ADMIN_IDS
+  # (НЕ TELEGRAM_TOKEN — это переменная для встроенного бота backend).
+  # Mount /etc/fptn в compose жёстко прописан на /opt/fptn/... —
+  # совпадает с INSTALL_DIR этого установщика.
   BOT_DIR="$INSTALL_DIR/fptn-admin-bot"
-  if [[ ! -d "$BOT_DIR" ]]; then
-    mkdir -p "$BOT_DIR"
-    cat > "$BOT_DIR/docker-compose.yml" <<'EOF'
-services:
-  telegram-admin-bot:
-    image: fptnvpn/fptn-admin-bot:latest
-    restart: unless-stopped
-    environment:
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      - FPTN_CONFIGS_FOLDER=/etc/fptn
-      - BOT_SETTINGS_FILE=/etc/fptn/bot_settings.json
-      - WELCOME_MESSAGE_EN=${WELCOME_MESSAGE_EN:-}
-      - WELCOME_MESSAGE_RU=${WELCOME_MESSAGE_RU:-}
-      - MAX_USER_SPEED_LIMIT=${MAX_USER_SPEED_LIMIT:-100}
-    volumes:
-      - /etc/fptn:/etc/fptn:rw
-    networks:
-      - fptn-network
-
-networks:
-  fptn-network:
-    external: true
-EOF
-  fi
-
-  # Создаём .env для бота
   BOT_ENV="$BOT_DIR/.env"
   {
-    printf 'TELEGRAM_TOKEN=%s\n' "$TG_TOKEN"
-    printf 'FPTN_CONFIGS_FOLDER=%s\n' "$VPN_DATA"
-    printf 'BOT_SETTINGS_FILE=%s/bot_settings.json\n' "$VPN_DATA"
-    printf 'WELCOME_MESSAGE_EN=\n'
-    printf 'WELCOME_MESSAGE_RU=\n'
+    printf 'TELEGRAM_API_TOKEN=%s\n' "$TG_TOKEN"
+    printf 'ADMIN_IDS=%s\n' "$TG_ADMIN_IDS"
+    printf 'USERS_FILE=/etc/fptn/users.list\n'
+    printf 'SERVERS_LIST_FILE=/etc/fptn/servers.json\n'
+    printf 'PREMIUM_SERVERS_FILE=/etc/fptn/premium_servers.json\n'
+    printf 'SERVERS_CENSORED_LIST_FILE=/etc/fptn/servers_censored_zone.json\n'
+    printf 'BLACKLIST_FILE=/etc/fptn/blocked_users.txt\n'
     printf 'MAX_USER_SPEED_LIMIT=%s\n' "$MAX_SPEED"
+    printf 'SERVICE_NAME=FPTN\n'
+    printf 'ENABLE_BROTLI_COMPRESSION=true\n'
   } > "$BOT_ENV"
   chmod 600 "$BOT_ENV"
-
-  # Запуск
+  say "  $BOT_ENV создан"
+  warn "  Бот монтирует docker.sock (rw) — доступ к боту = доступ к Docker."
   cd "$BOT_DIR"
   docker compose up -d --build
   BOT_INSTALLED="да"
@@ -413,9 +425,9 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-# Ждём frontend
+# Ждём frontend (nginx отдаёт index.html на "/", endpoint /health есть только у backend)
 for _ in $(seq 1 30); do
-  if curl -fsSk https://localhost:2663/health >/dev/null 2>&1; then
+  if curl -fsSk https://localhost:2663/ >/dev/null 2>&1; then
     say "  Frontend: healthy"
     break
   fi
@@ -431,15 +443,26 @@ if [[ "$BOT_INSTALLED" == "да" ]]; then
   fi
 fi
 
+# Пароль не печатаем в терминал: кладём в root-only файл (как install-admin.sh).
+CREDS_FILE="/root/fptn-admin-panel.pass"
+umask 077
+{
+  printf 'FPTN admin panel\n'
+  printf 'URL:    https://%s:2663\n' "$HOST_INPUT"
+  printf 'Login:  %s\n' "$ADMIN_LOGIN"
+  printf 'Password: %s\n' "$ADMIN_PASS"
+} > "$CREDS_FILE"
+chmod 600 "$CREDS_FILE"
+
 # =============================================================
 #  ИТОГОВАЯ СВОДКА
 # =============================================================
 hr
 cat <<EOF
 
-============================================================
+===========================================================
   FPTN развёрнут!
-============================================================
+===========================================================
 
   VPN-сервер:
     Образ:      fptnvpn/fptn-vpn-server:0.4.4
@@ -451,7 +474,7 @@ cat <<EOF
     URL:        https://$HOST_INPUT:2663
     Backend:    http://$HOST_INPUT:8000
     Логин:      $ADMIN_LOGIN
-    Пароль:     $ADMIN_PASS
+    Пароль:     сохранён в $CREDS_FILE (chmod 600, только root)
 
   Сервер:
     Добавлен:   $ADD_SERVER
@@ -459,20 +482,22 @@ cat <<EOF
     Порт:       $VPN_PORT
 
   Telegram-бот:
-    Статус:     $TG_ENABLED
+    Включён:    $TG_ENABLED
     Установлен: $BOT_INSTALLED
+    ADMIN_IDS:  ${TG_ADMIN_IDS:-<не задан — доступ всем!>}
 
   Управление:
     VPN логи:   cd $INSTALL_DIR/fptn/docker-compose && docker compose logs -f
     Панель логи: cd $INSTALL_DIR/fptn-admin && docker compose logs -f
+    Бот логи:   cd $INSTALL_DIR/fptn-admin-bot && docker compose logs -f
     Остановка:  cd $INSTALL_DIR/fptn/docker-compose && docker compose down
                 cd $INSTALL_DIR/fptn-admin && docker compose down
 
   ⚠️  Самоподписанный SSL — браузер будет ругаться на недоверенный сертификат.
       Для production замените на Let's Encrypt.
 
-============================================================
+===========================================================
 EOF
 hr
 
-say "Готово! Сохраните пароль: $ADMIN_PASS"
+say "Готово! Пароль админа сохранён в $CREDS_FILE (chmod 600)"
