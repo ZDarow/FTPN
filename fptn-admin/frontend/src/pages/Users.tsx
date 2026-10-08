@@ -24,7 +24,14 @@ import Spinner from '../components/ui/Spinner'
 import Modal from '../components/ui/Modal'
 import { ApiError, AuthError } from '../api/client'
 import { getHighlights } from '../api/dashboard'
-import { listUsers, updateUser, createUser, VpnUser, UserFilter, UserCreatePayload, UserCreated } from '../api/users'
+import {
+  listUsers,
+  updateUser,
+  createUser,
+  VpnUser,
+  UserFilter,
+  UserCreatePayload
+} from '../api/users'
 
 const PAGE_SIZE = 20
 const MIN_SPEED = 1
@@ -100,7 +107,7 @@ const Users = (): ReactElement => {
     username: '',
     password: '',
     maxSpeed: undefined,
-    premiumAccess: false,
+    premiumAccess: false
   })
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -253,12 +260,19 @@ const Users = (): ReactElement => {
       setTotal((prev) => prev + 1)
       refreshStats()
       setCreateModalOpen(false)
-      setCreateForm({ username: '', password: '', maxSpeed: undefined, premiumAccess: false })
+      setCreateForm({
+        username: '',
+        password: '',
+        maxSpeed: undefined,
+        premiumAccess: false
+      })
     } catch (err) {
       if (err instanceof AuthError) {
         setCreateError(t('users.authError'))
       } else {
-        setCreateError(err instanceof ApiError ? err.message : t('users.createError'))
+        setCreateError(
+          err instanceof ApiError ? err.message : t('users.createError')
+        )
       }
     } finally {
       setCreateLoading(false)
@@ -266,7 +280,12 @@ const Users = (): ReactElement => {
   }
 
   const openCreateModal = (): void => {
-    setCreateForm({ username: '', password: '', maxSpeed: undefined, premiumAccess: false })
+    setCreateForm({
+      username: '',
+      password: '',
+      maxSpeed: undefined,
+      premiumAccess: false
+    })
     setCreateError(null)
     setCreateModalOpen(true)
   }
@@ -523,14 +542,19 @@ const Users = (): ReactElement => {
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="create-username" className="block text-sm font-medium text-foreground">
+            <label
+              htmlFor="create-username"
+              className="block text-sm font-medium text-foreground"
+            >
               {t('users.username')}
             </label>
             <input
               id="create-username"
               type="text"
               value={createForm.username}
-              onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+              onChange={(e) =>
+                setCreateForm({ ...createForm, username: e.target.value })
+              }
               placeholder={t('users.usernamePlaceholder')}
               required
               autoFocus
@@ -538,21 +562,29 @@ const Users = (): ReactElement => {
             />
           </div>
           <div className="space-y-2">
-            <label htmlFor="create-password" className="block text-sm font-medium text-foreground">
+            <label
+              htmlFor="create-password"
+              className="block text-sm font-medium text-foreground"
+            >
               {t('users.password')}
             </label>
             <input
               id="create-password"
               type="password"
               value={createForm.password}
-              onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+              onChange={(e) =>
+                setCreateForm({ ...createForm, password: e.target.value })
+              }
               placeholder={t('users.passwordPlaceholder')}
               required
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <div className="space-y-2">
-            <label htmlFor="create-max-speed" className="block text-sm font-medium text-foreground">
+            <label
+              htmlFor="create-max-speed"
+              className="block text-sm font-medium text-foreground"
+            >
               {t('users.maxSpeed')}
             </label>
             <input
@@ -561,7 +593,12 @@ const Users = (): ReactElement => {
               min={MIN_SPEED}
               max={MAX_SPEED}
               value={createForm.maxSpeed ?? ''}
-              onChange={(e) => setCreateForm({ ...createForm, maxSpeed: e.target.value ? Number(e.target.value) : undefined })}
+              onChange={(e) =>
+                setCreateForm({
+                  ...createForm,
+                  maxSpeed: e.target.value ? Number(e.target.value) : undefined
+                })
+              }
               placeholder={t('users.maxSpeedPlaceholder')}
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
@@ -571,7 +608,12 @@ const Users = (): ReactElement => {
               id="create-premium"
               type="checkbox"
               checked={createForm.premiumAccess}
-              onChange={(e) => setCreateForm({ ...createForm, premiumAccess: e.target.checked })}
+              onChange={(e) =>
+                setCreateForm({
+                  ...createForm,
+                  premiumAccess: e.target.checked
+                })
+              }
               className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
             />
             <label htmlFor="create-premium" className="text-sm text-foreground">
