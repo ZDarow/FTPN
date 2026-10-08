@@ -14,7 +14,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 COPY pyproject.toml poetry.lock* ./
-RUN poetry install --no-root --with dev
+RUN poetry lock && poetry install --no-root --with dev
 
 COPY app ./app
 COPY tests ./tests
@@ -37,7 +37,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 COPY pyproject.toml poetry.lock* ./
-RUN poetry install --no-root --only main
+RUN poetry lock && poetry install --no-root --only main
 
 # From the test stage, so a plain build always runs the gate first.
 COPY --from=test /app/app ./app
