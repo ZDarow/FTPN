@@ -41,7 +41,9 @@ def auth(client):
 def _clean_state():
     from app.deps import vpn_store
     from app.telegram_bot import bot_runner
+    from app.routers.auth import _login_attempts
 
+    _login_attempts.clear()
     open(vpn_store.path, "w").close()
     for name in ("SERVERS_FILE", "PREMIUM_SERVERS_FILE", "CENSORED_SERVERS_FILE"):
         with open(os.environ[name], "w") as f:
