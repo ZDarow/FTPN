@@ -57,7 +57,10 @@ tui_info() {
   case "$_TUI_BACKEND" in
     whiptail) whiptail --title "$title" --msgbox "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" ;;
     dialog)   dialog   --title "$title" --msgbox "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" ;;
-    stdin)    printf '\n=== %s ===\n%s\n' "$title" "$text"; read -rp "Нажмите Enter..." ;;
+    stdin)
+      printf '\n=== %s ===\n%s\n' "$title" "$text" >&2
+      read -rp "Нажмите Enter..." _tui_dummy </dev/tty 2>/dev/null || read -rp "Нажмите Enter..." _tui_dummy || true
+      ;;
   esac
 }
 
@@ -70,8 +73,12 @@ tui_yesno() {
     stdin)
       local ans
       while true; do
-        printf '\n=== %s ===\n%s\n' "$title" "$text"
-        read -rp "Введите y/n: " ans
+        printf '\n=== %s ===\n%s\n' "$title" "$text" >&2
+        # При EOF (pipe закрыт) read возвращает не-0 —
+        # без этой проверки цикл бесконечен.
+        if ! read -rp "Введите y/n: " ans; then
+          return 1
+        fi
         [[ "$ans" =~ ^[Yy]$ ]] && return 0
         [[ "$ans" =~ ^[Nn]$ ]] && return 1
       done
@@ -86,8 +93,12 @@ tui_input() {
     whiptail) whiptail --title "$title" --inputbox "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" "$default" ;;
     dialog)   dialog   --title "$title" --inputbox "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" "$default" ;;
     stdin)
+      # Prompt — в stderr, чтобы $(tui_input ...) захватил
+      # только значение. Иначе вывод захватывает и prompt,
+      # и default — многострочный мусор.
       local _prompt="[$default]"
-      printf '\n=== %s ===\n%s\nТекущее: %s\n' "$title" "$text" "$_prompt"
+      printf '\n=== %s ===\n%s\nТекущее: %s\n' "$title" "$text" "$_prompt" >&2
+      local val
       read -rp "Значение: " val
       [[ -z "$val" && -n "$default" ]] && echo "$default" || echo "$val"
       ;;
@@ -101,8 +112,11 @@ tui_password() {
     whiptail) whiptail --title "$title" --passwordbox "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" ;;
     dialog)   dialog   --title "$title" --passwordbox "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" ;;
     stdin)
-      printf '\n=== %s ===\n%s\n' "$title" "$text"
-      read -rsp "Значение: " val; echo
+      # Prompt — в stderr (см. tui_input).
+      printf '\n=== %s ===\n%s\n' "$title" "$text" >&2
+      local val
+      read -rsp "Значение: " val
+      printf '\n' >&2
       echo "$val"
       ;;
   esac
@@ -117,22 +131,30 @@ tui_menu() {
     whiptail) whiptail --title "$title" --menu "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" 10 "$@" ;;
     dialog)   dialog   --title "$title" --menu "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" 10 "$@" ;;
     stdin)
-      printf '\n=== %s ===\n%s\n' "$title" "$text"
+      # Prompt — в stderr (см. tui_input).
+      printf '\n=== %s ===\n%s\n' "$title" "$text" >&2
+      # Сохраняем args ДО цикла вывода: shift 2 в цикле
+      # опустошает $@, и второй цикл (поиск tag) не
+      # выполнялся — tui_menu всегда возвращал первый тег.
+      local -a args=("$@")
       local i=1 choice
       while [[ $# -gt 0 ]]; do
-        printf '  %d) %-20s — %s\n' "$i" "$1" "$2"
+        printf '  %d) %-20s — %s\n' "$i" "$1" "$2" >&2
         i=$((i+1)); shift 2
       done
-      read -rp "Выберите номер: " choice
+      if ! read -rp "Выберите номер: " choice; then
+        choice=1
+      fi
       # Найти tag по индексу
       local idx=1
-      local -a args=("$@")
-      while [[ $# -gt 0 ]]; do
+      local -a remaining=("${args[@]}")
+      while [[ ${#remaining[@]} -gt 0 ]]; do
         if [[ "$idx" -eq "$choice" ]]; then
-          echo "$1"
+          echo "${remaining[0]}"
           return 0
         fi
-        idx=$((idx+1)); shift 2
+        idx=$((idx+1))
+        remaining=("${remaining[@]:2}")
       done
       echo "${args[0]:-}"
       ;;
@@ -150,12 +172,16 @@ tui_checklist() {
       dialog   --title "$title" --separate-output --checklist "$text" "$_TUI_HEIGHT" "$_TUI_WIDTH" 10 "$@"
       ;;
     stdin)
-      printf '\n=== %s ===\n%s\n(введите теги через пробел, пусто = ничего)\n' "$title" "$text"
+      # Prompt — в stderr (см. tui_input).
+      printf '\n=== %s ===\n%s\n(введите теги через пробел, пусто = ничего)\n' "$title" "$text" >&2
       while [[ $# -gt 0 ]]; do
-        printf '  [ ] %-15s — %s\n' "$1" "$2"
+        printf '  [ ] %-15s — %s\n' "$1" "$2" >&2
         shift 2
       done
-      read -rp "Теги: " vals
+      local vals
+      if ! read -rp "Теги: " vals; then
+        vals=""
+      fi
       echo "$vals"
       ;;
   esac
@@ -177,7 +203,7 @@ tui_gauge_start() {
       _tui_gauge_pid=$!
       ;;
     stdin)
-      printf '\n=== %s ===\n%s\n' "$title" "$text"
+      printf '\n=== %s ===\n%s\n' "$title" "$text" >&2
       ;;
   esac
 }
