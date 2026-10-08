@@ -261,6 +261,7 @@ TResult ExecuteWithTimeout(const std::function<TResult()>& operation,
       bool ready = false;
       TResult result;
       std::atomic<bool> cancelled{false};
+      std::thread worker;
     };
 
     const auto start_time = std::chrono::steady_clock::now();
@@ -269,7 +270,7 @@ TResult ExecuteWithTimeout(const std::function<TResult()>& operation,
 
     // NOLINTNEXTLINE(bugprone-exception-escape)
     std::weak_ptr<SharedState> weak_state = state;
-    std::thread([weak_state, operation]() {
+    state->worker = std::thread([weak_state, operation]() {
       TResult impl_result = operation();
       // check state
       if (auto state = weak_state.lock()) {
@@ -280,7 +281,7 @@ TResult ExecuteWithTimeout(const std::function<TResult()>& operation,
           state->cv.notify_one();
         }
       }
-    }).detach();
+    });
 
     std::unique_lock<std::mutex> lock(state->mutex);  // mutex
     if (!state->cv.wait_for(lock, std::chrono::seconds(timeout),
@@ -294,7 +295,13 @@ TResult ExecuteWithTimeout(const std::function<TResult()>& operation,
 
       SPDLOG_WARN("{} [{}] - Timeout after {} ms for server {}", operation_name,
           handle, duration.count(), host);
+      if (state->worker.joinable()) {
+        state->worker.join();
+      }
       return timeout_result;
+    }
+    if (state->worker.joinable()) {
+      state->worker.join();
     }
     return state->result;
   } catch (...) {

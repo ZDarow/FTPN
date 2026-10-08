@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -41,14 +41,14 @@ class UsersPage(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    maxSpeed: Optional[int] = Field(default=None, ge=0)
-    blocked: Optional[bool] = None
-    premiumAccess: Optional[bool] = None
+    username: str | None = None
+    maxSpeed: int | None = Field(default=None, ge=0)
+    blocked: bool | None = None
+    premiumAccess: bool | None = None
 
     @field_validator("username")
     @classmethod
-    def _alnum(cls, value: Optional[str]) -> Optional[str]:
+    def _alnum(cls, value: str | None) -> str | None:
         if value is not None and not value.isalnum():
             raise ValueError("username must be alphanumeric")
         return value
@@ -57,7 +57,7 @@ class UserUpdate(BaseModel):
 class UserCreate(BaseModel):
     username: str
     password: str
-    maxSpeed: Optional[int] = Field(default=None, ge=0)
+    maxSpeed: int | None = Field(default=None, ge=0)
     premiumAccess: bool = False
 
     @field_validator("username")
@@ -89,11 +89,11 @@ class ServerCreate(Server):
 
 
 class ServerUpdate(BaseModel):
-    name: Optional[str] = None
-    host: Optional[str] = None
-    md5_fingerprint: Optional[str] = None
-    port: Optional[int] = None
-    ping: Optional[int] = None
+    name: str | None = None
+    host: str | None = None
+    md5_fingerprint: str | None = None
+    port: int | None = None
+    ping: int | None = None
 
 
 class ServersList(BaseModel):
@@ -119,11 +119,11 @@ class BotSettingsOut(BaseModel):
 
 
 class BotSettingsUpdate(BaseModel):
-    telegramToken: Optional[str] = None
-    maxUserSpeedLimit: Optional[int] = Field(default=None, ge=0)
-    serviceName: Optional[str] = None
-    welcomeMessageEn: Optional[str] = None
-    welcomeMessageRu: Optional[str] = None
+    telegramToken: str | None = None
+    maxUserSpeedLimit: int | None = Field(default=None, ge=0)
+    serviceName: str | None = None
+    welcomeMessageEn: str | None = None
+    welcomeMessageRu: str | None = None
 
 
 class BotEnabledUpdate(BaseModel):

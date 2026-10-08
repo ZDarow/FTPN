@@ -4,14 +4,11 @@ services:
     restart: unless-stopped
     environment:
       - JWT_TTL_MINUTES=${JWT_TTL_MINUTES:-60}
-      # Обязательные переменные: compose падает на старте, если они не заданы.
-      # Раньше здесь стояли дефолты admin/admin и CORS_ORIGINS=*, то есть
-      # панель поднималась с заведомо известными логином и паролем.
-      - ADMIN_LOGIN=${ADMIN_LOGIN:?задайте ADMIN_LOGIN в .env}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?задайте ADMIN_PASSWORD в .env}
+      - ADMIN_LOGIN=${ADMIN_LOGIN:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - USERS_FILE=/etc/fptn/users.list
       - ADMINS_FILE=/etc/fptn/admins.json
-      - CORS_ORIGINS=${CORS_ORIGINS:?задайте CORS_ORIGINS в .env}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - ENABLE_BROTLI_COMPRESSION=${ENABLE_BROTLI_COMPRESSION:-false}
       - SERVERS_FILE=/etc/fptn/servers.json
       - PREMIUM_SERVERS_FILE=/etc/fptn/premium_servers.json

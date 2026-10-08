@@ -19,8 +19,8 @@ services:
       - /usr/bin/docker:/usr/bin/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ./src:/app/src
-      - fptn-server-data:/etc/fptn
-      - ${FPTN_CONFIGS_FOLDER:-/opt/fptn/fptn/docker-compose/fptn-server-data}:${FPTN_CONFIGS_FOLDER:-/opt/fptn/fptn/docker-compose/fptn-server-data}:ro
+      - /opt/fptn/fptn/docker-compose/fptn-server-data:/etc/fptn
+      - /opt/fptn/fptn/docker-compose/fptn-server-data:/opt/fptn/fptn/docker-compose/fptn-server-data:ro
     networks:
       - fptn-network
 
@@ -28,6 +28,4 @@ networks:
   fptn-network:
     external: true
 
-volumes:
-  fptn-server-data:
-    external: true
+

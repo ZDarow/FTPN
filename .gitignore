@@ -118,6 +118,10 @@ docs/_build/
 *.rej
 .cache/
 
+# Вложенные git-репозитории (отдельные проекты)
+fptn-manager/.git
+FptnClient-Android/.git
+
 # --- IDE / Claude / агентские артефакты ---
 .claude/
 .kilo/

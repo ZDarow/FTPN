@@ -6,7 +6,9 @@ file with bcrypt-hashed passwords::
 
 from __future__ import annotations
 
+import fcntl
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import bcrypt
@@ -40,12 +42,24 @@ class AdminStore:
     def _hash(password: str) -> str:
         return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
 
+    @contextmanager
+    def _locked(self):
+        lock_path = str(self.path) + ".lock"
+        with open(lock_path, "w", encoding="utf-8") as lf:
+            fcntl.flock(lf, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lf, fcntl.LOCK_UN)
+
     def authenticate(self, login: str, password: str) -> bool:
         entry = self._load().get(login)
         if not entry:
             return False
         try:
-            return bcrypt.checkpw(password.encode("utf-8"), entry["password_hash"].encode("utf-8"))
+            return bcrypt.checkpw(
+                password.encode("utf-8"), entry["password_hash"].encode("utf-8")
+            )
         except (ValueError, KeyError):
             return False
 
@@ -54,25 +68,42 @@ class AdminStore:
         return bool(entry and entry.get("must_change_password"))
 
     def create(self, login: str, password: str) -> None:
-        data = self._load()
-        if login in data:
-            raise AdminExists(login)
-        data[login] = {"password_hash": self._hash(password), "must_change_password": False}
-        self._save(data)
+        with self._locked():
+            data = self._load()
+            if login in data:
+                raise AdminExists(login)
+            data[login] = {
+                "password_hash": self._hash(password),
+                "must_change_password": False,
+            }
+            self._save(data)
 
     def change_password(self, login: str, current: str, new: str) -> bool:
-        data = self._load()
-        entry = data.get(login)
-        if not entry or not bcrypt.checkpw(current.encode("utf-8"), entry["password_hash"].encode("utf-8")):
-            return False
-        entry["password_hash"] = self._hash(new)
-        entry["must_change_password"] = False
-        self._save(data)
-        return True
+        with self._locked():
+            data = self._load()
+            entry = data.get(login)
+            if not entry or not bcrypt.checkpw(
+                current.encode("utf-8"), entry["password_hash"].encode("utf-8")
+            ):
+                return False
+            entry["password_hash"] = self._hash(new)
+            entry["must_change_password"] = False
+            self._save(data)
+            return True
 
-    def ensure_seed(self, login: str | None, password: str | None, force_change: bool = False) -> None:
+    def ensure_seed(
+        self, login: str | None, password: str | None, force_change: bool = False
+    ) -> None:
         """Seed the first admin when the store is empty (Grafana-style bootstrap)."""
         if self._load():
             return
         if login and password:
-            self._save({login: {"password_hash": self._hash(password), "must_change_password": force_change}})
+            with self._locked():
+                self._save(
+                    {
+                        login: {
+                            "password_hash": self._hash(password),
+                            "must_change_password": force_change,
+                        }
+                    }
+                )

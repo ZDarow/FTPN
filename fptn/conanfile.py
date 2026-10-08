@@ -14,7 +14,7 @@ class FPTN(ConanFile):
     version = FPTN_VERSION
     requires = (
         "argparse/3.2",
-        "boost/1.90.0",
+        "boost/1.91.0",
         "brotli/1.2.0",
         "cpp-httplib/0.46.1",
         "fmt/12.1.0",
@@ -116,7 +116,6 @@ class FPTN(ConanFile):
 
     def requirements(self):
         self._register_local_recipe("boringssl", "openssl", "boringssl", True, False)
-        self._register_local_recipe("yaff", "yaff", "0.0.0", visible=False)
         if self.options.with_gui_client:
             self.requires("qt/6.7.3")
         if self.settings.os != "Windows":
@@ -130,7 +129,6 @@ class FPTN(ConanFile):
     def build_requirements(self):
         self.build_requires("cmake/3.31.12", override=True)
         self.tool_requires("protobuf/5.29.3")
-        self.tool_requires("yaff/0.0.0@local/local")
 
         self.test_requires("gtest/1.18.0")
 
@@ -238,27 +236,7 @@ class FPTN(ConanFile):
                     dst=os.path.join(self.package_folder, "lib"),
                 )
             # absorb yaff (runtime lib + headers), since it is a private dependency
-            yaff_pkg = self.dependencies["yaff"].package_folder
-            copy(
-                self,
-                "*.a",
-                src=os.path.join(yaff_pkg, "lib"),
-                dst=os.path.join(self.package_folder, "lib"),
-                keep_path=False,
-            )
-            copy(
-                self,
-                "*.lib",
-                src=os.path.join(yaff_pkg, "lib"),
-                dst=os.path.join(self.package_folder, "lib"),
-                keep_path=False,
-            )
-            copy(
-                self,
-                "*.h",
-                src=os.path.join(yaff_pkg, "include"),
-                dst=os.path.join(self.package_folder, "include"),
-            )
+            # yaff is compiled as part of fptn-protocol-lib, no separate package needed
 
     def package_info(self):
         if self.options.build_only_fptn_lib:
@@ -266,7 +244,6 @@ class FPTN(ConanFile):
                 "fptn-protocol-lib_static",
                 "ntp_client",
                 "camouflage-tls",
-                "yaff_proto",
             ]
             self.cpp_info.includedirs = ["include"]
             self.cpp_info.libdirs = ["lib"]

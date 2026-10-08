@@ -32,6 +32,14 @@ def build_token(
 
 def build_access_link(token: str, brotli_enabled: bool) -> str:
     if brotli_enabled:
-        compressed = brotli.compress(token.encode("utf-8"), quality=11, lgwin=24, lgblock=24, mode=brotli.MODE_TEXT)
+        compressed = brotli.compress(
+            token.encode("utf-8"),
+            quality=11,
+            lgwin=24,
+            lgblock=24,
+            mode=brotli.MODE_TEXT,
+        )
         return "fptnb:" + base64.b64encode(compressed).decode("utf-8").replace("=", "")
-    return "fptn:" + base64.b64encode(token.encode("utf-8")).decode("utf-8").replace("=", "")
+    return "fptn:" + base64.b64encode(token.encode("utf-8")).decode("utf-8").replace(
+        "=", ""
+    )

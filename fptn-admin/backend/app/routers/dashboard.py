@@ -4,8 +4,9 @@ from app.deps import vpn_store
 from app.schemas import Highlights
 from app.security import get_current_admin
 
-
-router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_admin)])
+router = APIRouter(
+    prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_admin)]
+)
 
 
 @router.get(

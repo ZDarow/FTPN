@@ -81,14 +81,19 @@ ServerInfo FindFastestServer(const std::string& sni,
   auto state = std::make_shared<State>();
   state->total = selected_servers.size();
 
+  std::vector<std::thread> workers;
+  workers.reserve(selected_servers.size());
+
   for (const auto& server : selected_servers) {
-    // NOLINTNEXTLINE(bugprone-exception-escape)
-    std::thread([state, server, sni, timeout_sec, censorship_strategy]() {
+    workers.emplace_back([state, server, sni, timeout_sec, censorship_strategy]() {
       std::uint64_t ms = kMaxTimeout;
       try {
         ms = GetDownloadTimeMs(server, sni, timeout_sec, server.md5_fingerprint,
             censorship_strategy);
-      } catch (...) {  // NOLINT
+      } catch (const std::exception& ex) {
+        SPDLOG_WARN("Worker exception in FindFastestServer: {}", ex.what());
+      } catch (...) {
+        SPDLOG_WARN("Unknown worker exception in FindFastestServer");
       }
       {
         const std::scoped_lock<std::mutex> lock(state->mtx);  // mutex
@@ -97,13 +102,20 @@ ServerInfo FindFastestServer(const std::string& sni,
         ++state->completed;
       }
       state->cv.notify_one();
-    }).detach();
+    });
   }
 
   std::unique_lock<std::mutex> lock(state->mtx);
   state->cv.wait_for(lock, std::chrono::seconds(timeout_sec + 2), [&state] {
     return state->first_server.has_value() || state->completed == state->total;
   });
+
+  // Join all workers to avoid detached threads / zombies
+  for (auto& worker : workers) {
+    if (worker.joinable()) {
+      worker.join();
+    }
+  }
 
   if (!state->first_server.has_value()) {
     throw std::runtime_error("All servers unavailable!");
@@ -135,9 +147,11 @@ std::optional<LoginResult> FindServerByLogin(const std::string& sni,
   auto state = std::make_shared<State>();
   state->total = selected_servers.size();
 
+  std::vector<std::thread> workers;
+  workers.reserve(selected_servers.size());
+
   for (const auto& server : selected_servers) {
-    // NOLINTNEXTLINE(bugprone-exception-escape)
-    std::thread([state, server, sni, timeout_sec, censorship_strategy]() {
+    workers.emplace_back([state, server, sni, timeout_sec, censorship_strategy]() {
       std::optional<LoginResult> local;
       try {
         const std::string body =
@@ -154,7 +168,10 @@ std::optional<LoginResult> FindServerByLogin(const std::string& sni,
                 .access_token = msg["access_token"].get<std::string>()};
           }
         }
-      } catch (...) {  // NOLINT
+      } catch (const std::exception& ex) {
+        SPDLOG_WARN("Worker exception in FindServerByLogin: {}", ex.what());
+      } catch (...) {
+        SPDLOG_WARN("Unknown worker exception in FindServerByLogin");
       }
       {
         const std::scoped_lock<std::mutex> lock(state->mtx);
@@ -163,13 +180,20 @@ std::optional<LoginResult> FindServerByLogin(const std::string& sni,
         ++state->completed;
       }
       state->cv.notify_one();
-    }).detach();
+    });
   }
 
   std::unique_lock<std::mutex> lock(state->mtx);
   state->cv.wait_for(lock, std::chrono::seconds(timeout_sec + 2), [&state] {
     return state->result.has_value() || state->completed == state->total;
   });
+
+  // Join all workers to avoid detached threads / zombies
+  for (auto& worker : workers) {
+    if (worker.joinable()) {
+      worker.join();
+    }
+  }
 
   return state->result;
 }

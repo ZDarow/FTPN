@@ -10,13 +10,21 @@ def _decode(token: str) -> dict:
 
 
 def test_add_list_and_delete_server(client, auth):
-    created = client.post("/api/v1/servers", headers=auth, json={"name": "S1", "host": "1.2.3.4", "port": 443})
+    created = client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "S1", "host": "1.2.3.4", "port": 443},
+    )
     assert created.status_code == 201
 
     listed = client.get("/api/v1/servers", headers=auth).json()
     assert [s["name"] for s in listed["regular"]] == ["S1"]
 
-    dup = client.post("/api/v1/servers", headers=auth, json={"name": "S1", "host": "1.2.3.4", "port": 443})
+    dup = client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "S1", "host": "1.2.3.4", "port": 443},
+    )
     assert dup.status_code == 409
 
     deleted = client.delete("/api/v1/servers/regular/S1", headers=auth)
@@ -25,31 +33,59 @@ def test_add_list_and_delete_server(client, auth):
 
 
 def test_update_server(client, auth):
-    client.post("/api/v1/servers", headers=auth, json={"name": "S1", "host": "1.2.3.4", "port": 443})
-    client.post("/api/v1/servers", headers=auth, json={"name": "S2", "host": "5.6.7.8", "port": 443})
+    client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "S1", "host": "1.2.3.4", "port": 443},
+    )
+    client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "S2", "host": "5.6.7.8", "port": 443},
+    )
 
-    updated = client.put("/api/v1/servers/regular/S1", headers=auth, json={"host": "9.9.9.9", "ping": 42})
+    updated = client.put(
+        "/api/v1/servers/regular/S1", headers=auth, json={"host": "9.9.9.9", "ping": 42}
+    )
     assert updated.status_code == 200
-    assert updated.json() == {"name": "S1", "host": "9.9.9.9", "md5_fingerprint": "", "port": 443, "ping": 42}
+    assert updated.json() == {
+        "name": "S1",
+        "host": "9.9.9.9",
+        "md5_fingerprint": "",
+        "port": 443,
+        "ping": 42,
+    }
 
-    renamed = client.put("/api/v1/servers/regular/S1", headers=auth, json={"name": "S1-renamed"})
+    renamed = client.put(
+        "/api/v1/servers/regular/S1", headers=auth, json={"name": "S1-renamed"}
+    )
     assert renamed.status_code == 200
     assert renamed.json()["name"] == "S1-renamed"
 
     listed = client.get("/api/v1/servers", headers=auth).json()
     assert {s["name"] for s in listed["regular"]} == {"S1-renamed", "S2"}
 
-    conflict = client.put("/api/v1/servers/regular/S1-renamed", headers=auth, json={"name": "S2"})
+    conflict = client.put(
+        "/api/v1/servers/regular/S1-renamed", headers=auth, json={"name": "S2"}
+    )
     assert conflict.status_code == 409
 
-    missing = client.put("/api/v1/servers/regular/nope", headers=auth, json={"host": "1.1.1.1"})
+    missing = client.put(
+        "/api/v1/servers/regular/nope", headers=auth, json={"host": "1.1.1.1"}
+    )
     assert missing.status_code == 404
 
 
 def test_create_user_returns_token_with_servers(client, auth):
-    client.post("/api/v1/servers", headers=auth, json={"name": "S1", "host": "1.2.3.4", "port": 443})
+    client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "S1", "host": "1.2.3.4", "port": 443},
+    )
 
-    resp = client.post("/api/v1/users", headers=auth, json={"username": "100", "password": "pw"})
+    resp = client.post(
+        "/api/v1/users", headers=auth, json={"username": "100", "password": "pw"}
+    )
     assert resp.status_code == 201
     data = _decode(resp.json()["token"])
     assert data["username"] == "100" and data["password"] == "pw"
@@ -58,17 +94,35 @@ def test_create_user_returns_token_with_servers(client, auth):
 
 
 def test_premium_user_token_includes_premium_servers(client, auth):
-    client.post("/api/v1/servers", headers=auth, json={"name": "R", "host": "1.1.1.1", "port": 443})
-    client.post("/api/v1/servers", headers=auth, json={"name": "P", "host": "2.2.2.2", "port": 443, "kind": "premium"})
+    client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "R", "host": "1.1.1.1", "port": 443},
+    )
+    client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "P", "host": "2.2.2.2", "port": 443, "kind": "premium"},
+    )
 
-    resp = client.post("/api/v1/users", headers=auth, json={"username": "200", "password": "pw", "premiumAccess": True})
+    resp = client.post(
+        "/api/v1/users",
+        headers=auth,
+        json={"username": "200", "password": "pw", "premiumAccess": True},
+    )
     data = _decode(resp.json()["token"])
     assert {s["name"] for s in data["servers"]} == {"R", "P"}
 
 
 def test_issue_token_resets_password(client, auth):
-    client.post("/api/v1/servers", headers=auth, json={"name": "S1", "host": "1.2.3.4", "port": 443})
-    client.post("/api/v1/users", headers=auth, json={"username": "100", "password": "pw"})
+    client.post(
+        "/api/v1/servers",
+        headers=auth,
+        json={"name": "S1", "host": "1.2.3.4", "port": 443},
+    )
+    client.post(
+        "/api/v1/users", headers=auth, json={"username": "100", "password": "pw"}
+    )
 
     resp = client.post("/api/v1/users/100/token", headers=auth)
     assert resp.status_code == 200

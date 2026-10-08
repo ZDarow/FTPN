@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -11,13 +12,15 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def create_access_token(subject: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_ttl_minutes)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.jwt_ttl_minutes)
     payload = {"sub": subject, "exp": expire}
     return jwt.encode(payload, get_jwt_secret(), algorithm=settings.jwt_algorithm)
 
 
 def get_current_admin(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ] = None,
 ) -> str:
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
