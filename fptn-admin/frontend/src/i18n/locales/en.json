@@ -1,6 +1,9 @@
 {
   "common": {
-    "genericError": "Something went wrong. Try again."
+    "genericError": "Something went wrong. Try again.",
+    "cancel": "Cancel",
+    "create": "Create",
+    "creating": "Creating…"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -75,7 +78,17 @@
     "loadError": "Failed to load users.",
     "updateSpeedError": "Failed to update max speed.",
     "updatePremiumError": "Failed to update premium access.",
-    "updateBlockedError": "Failed to update blocked status."
+    "updateBlockedError": "Failed to update blocked status.",
+    "createUser": "Create user",
+    "username": "Telegram ID",
+    "usernamePlaceholder": "Enter Telegram ID",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password",
+    "maxSpeed": "Max speed",
+    "maxSpeedPlaceholder": "Optional (default 30 Mbps)",
+    "premiumAccess": "Premium access",
+    "createError": "Failed to create user.",
+    "authError": "Session expired. Please sign in again."
   },
   "servers": {
     "title": "Servers",

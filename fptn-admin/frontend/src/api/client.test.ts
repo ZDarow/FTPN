@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
+  AuthError,
   apiRequest,
   clearToken,
   getMustChangePassword,
@@ -107,15 +108,47 @@ describe('apiRequest', () => {
     })
   })
 
-  it('falls back to the "detail" field for non-fptn backends', async () => {
+  it('throws an AuthError for 401 and clears the token', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ detail: 'Not authenticated' }), {
         status: 401
       })
     )
 
+    setToken('jwt-abc')
     await expect(apiRequest('/users')).rejects.toMatchObject({
-      message: 'Not authenticated'
+      status: 401,
+      name: 'AuthError',
+      message: 'Сессия истекла. Войдите снова.'
+    })
+    expect(getToken()).toBeNull()
+  })
+
+  it('throws an AuthError for 403 and clears the token', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Forbidden' }), {
+        status: 403
+      })
+    )
+
+    setToken('jwt-abc')
+    await expect(apiRequest('/users')).rejects.toMatchObject({
+      status: 403,
+      name: 'AuthError',
+      message: 'Доступ запрещён.'
+    })
+    expect(getToken()).toBeNull()
+  })
+
+  it('falls back to the "detail" field for other error statuses', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Not found' }), {
+        status: 404
+      })
+    )
+
+    await expect(apiRequest('/users')).rejects.toMatchObject({
+      message: 'Not found'
     })
   })
 

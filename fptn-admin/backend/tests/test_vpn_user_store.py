@@ -24,8 +24,12 @@ def _update(store, username, **kw):
 
 def test_create_writes_fptn_format(store):
     store.create("184672951", "secret", 250, True)
+    rec = store.get("184672951")
+    assert rec is not None
     line = store.path.read_text().splitlines()[0].split()
-    assert line == ["184672951", hash_password("secret"), "250", "1"]
+    assert line[:4] == ["184672951", rec.password_hash, "250", "1"]
+    assert len(line) == 5
+    assert line[4] != ""
 
 
 def test_create_duplicate_raises(store):

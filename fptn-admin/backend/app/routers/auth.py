@@ -8,6 +8,12 @@ from app.security import create_access_token, get_current_admin
 
 router = APIRouter(tags=["auth"])
 
+# In-memory login-rate limiter (per-process).
+#
+# WARNING: this limiter is not shared across multiple gunicorn/uvicorn workers
+# and does not persist across restarts. For production deployments behind a
+# load balancer, replace this with a distributed rate limiter (e.g. Redis
+# + sliding-window counter or a dedicated reverse-proxy limit).
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5
 _WINDOW_SECONDS = 60

@@ -19,6 +19,13 @@ def build_token(
     premium: list[dict],
     censored: list[dict],
 ) -> str:
+    """Build the fptn access-token payload.
+
+    NOTE: the payload intentionally contains no password or password hash.
+    The VPN client authenticates against the C++ server using the password
+    that was issued out-of-band (stored as a salted SHA-256 hash in
+    ``users.list``).
+    """
     servers = premium + regular if is_premium else regular
     data = {
         "version": 1,

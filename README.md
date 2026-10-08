@@ -12,10 +12,10 @@
 # 1. (опционально) prereq — только если сервер чистый
 bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/prereq-install.sh)
 
-# 2. VPN-сервер (с TUI-настройкой и опциональной установкой fptn-manager)
-bash <(curl -fsSL https://raw.githubusercontent.com/ZDarow/FTPN/master/deploy/install.sh)
+# 2. Единый установщик «одной командой» (VPN + админ-панель + Telegram-бот)
+sudo bash deploy/one-install.sh
 
-# 3. (опционально) админ-панель и Telegram-бот
+# 3. (опционально) точечная установка отдельных компонентов
 bash /opt/fptn/deploy/install-admin.sh
 bash /opt/fptn/deploy/install-bot.sh
 ```
@@ -40,14 +40,15 @@ FTPN/
 
 ```
 deploy/
-├── prereq-install.sh     # Установка Docker, Compose, UFW на чистый сервер
-├── install.sh            # VPN-сервер (готовый образ fptnvpn/* с DockerHub)
-├── install-admin.sh      # Админ-панель (сборка backend/frontend из исходников)
-├── install-bot.sh        # Telegram-бот
-├── configure.sh          # TUI-перенастройка .env (whiptail/dialog/stdin)
-├── uninstall.sh          # Полное удаление
+├── one-install.sh         # Единый установщик «одной командой» (VPN + админка + бот)
+├── full-install.sh        # Единый установщик VPN + Admin Panel
+├── install.sh             # VPN-сервер (готовый образ fptnvpn/* с DockerHub)
+├── install-admin.sh       # Админ-панель (сборка backend/frontend из исходников)
+├── install-bot.sh         # Telegram-бот
+├── configure.sh           # TUI-перенастройка .env (whiptail/dialog/stdin)
+├── uninstall.sh           # Полное удаление
 └── lib/
-    ├── tui.sh            # TUI-библиотека (whiptail > dialog > stdin)
+    ├── tui.sh             # TUI-библиотека (whiptail > dialog > stdin)
     └── install-manager.sh # Установка CLI-менеджера от FarazFe
 ```
 

@@ -4,12 +4,14 @@ truth for VPN users.
 File format (one user per line), shared with the fptn C++ server and the
 telegram-bot::
 
-    <telegramId> <sha256_hex_password> <speed_MB> <is_premium(0|1)>
+    <telegramId> <sha256_hex_password> <speed_MB> <is_premium(0|1)> [<salt_hex>]
 
 Conventions used by this service:
   * ``blocked`` is derived, not stored: a user is blocked when ``speed == 0``.
   * writes are atomic (temp file + ``os.replace``) and guarded by an exclusive
     file lock so we never clash with the bot writing the same file.
+  * ``salt`` is optional for backward compatibility: missing salt means legacy
+    unsalted SHA-256; present salt means ``SHA256(salt + password)``.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import secrets
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -41,15 +44,17 @@ class VpnRecord:
     password_hash: str
     speed: int
     is_premium: bool
+    salt: str = ""
 
     @property
     def blocked(self) -> bool:
         return self.speed == 0
 
 
-def hash_password(password: str) -> str:
-    """SHA-256 hex — must match the fptn C++ server's hashing."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+def hash_password(password: str, salt: str = "") -> str:
+    """SHA-256 hex with optional per-user salt."""
+    data = (salt + password).encode("utf-8") if salt else password.encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
 
 
 class VpnUserStore:
@@ -74,7 +79,8 @@ class VpnUserStore:
                 except ValueError:
                     continue
                 is_premium = len(parts) >= 4 and parts[3] == "1"
-                users[username] = VpnRecord(username, password_hash, speed_int, is_premium)
+                salt = parts[4] if len(parts) >= 5 else ""
+                users[username] = VpnRecord(username, password_hash, speed_int, is_premium, salt)
         return users
 
     def _write_all(self, users: dict[str, VpnRecord]) -> None:
@@ -84,7 +90,8 @@ class VpnUserStore:
             with os.fdopen(fd, "w") as f:
                 for rec in users.values():
                     premium = "1" if rec.is_premium else "0"
-                    f.write(f"{rec.username} {rec.password_hash} {rec.speed} {premium}\n")
+                    salt = rec.salt if rec.salt else ""
+                    f.write(f"{rec.username} {rec.password_hash} {rec.speed} {premium} {salt}\n")
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, self.path)
@@ -131,7 +138,8 @@ class VpnUserStore:
             rec = users.get(username)
             if rec is None:
                 raise UserNotFound(username)
-            rec.password_hash = hash_password(password)
+            rec.salt = secrets.token_hex(16)
+            rec.password_hash = hash_password(password, rec.salt)
             self._write_all(users)
             return rec
 
@@ -148,7 +156,8 @@ class VpnUserStore:
             users = self._read_all()
             if username in users:
                 raise UserExists(username)
-            rec = VpnRecord(username, hash_password(password), max_speed, is_premium)
+            salt = secrets.token_hex(16)
+            rec = VpnRecord(username, hash_password(password, salt), max_speed, is_premium, salt)
             users[username] = rec
             self._write_all(users)
             return rec

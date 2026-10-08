@@ -333,10 +333,8 @@ entry = {"host": host, "port": port, "name": f"Server-{host}"}
 if entry not in regular.get("regular", []):
     regular.setdefault("regular", []).append(entry)
     save(regular_file, regular)
-    print(f"  Сервер добавлен в regular: {host}:{port}")
-else:
-    print(f"  Сервер уже есть в regular: {host}:{port}")
 PYEOF
+  say "  Сервер обработан: $HOST_INPUT:$VPN_PORT"
 fi
 
 # Сборка и запуск панели

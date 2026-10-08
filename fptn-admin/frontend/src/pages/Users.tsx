@@ -1,9 +1,10 @@
-import React, { ReactElement, useEffect, useState } from 'react'
+import React, { ReactElement, useEffect, useState, useRef } from 'react'
 import {
   Ban,
   Check,
   Gauge,
   Pencil,
+  Plus,
   Search,
   Sparkles,
   X,
@@ -20,9 +21,10 @@ import {
 } from '../components/ui/Table'
 import Pagination from '../components/ui/Pagination'
 import Spinner from '../components/ui/Spinner'
-import { ApiError } from '../api/client'
+import Modal from '../components/ui/Modal'
+import { ApiError, AuthError } from '../api/client'
 import { getHighlights } from '../api/dashboard'
-import { listUsers, updateUser, VpnUser, UserFilter } from '../api/users'
+import { listUsers, updateUser, createUser, VpnUser, UserFilter, UserCreatePayload, UserCreated } from '../api/users'
 
 const PAGE_SIZE = 20
 const MIN_SPEED = 1
@@ -85,7 +87,6 @@ const Users = (): ReactElement => {
   const [statsLoading, setStatsLoading] = useState(true)
 
   const [page, setPage] = useState(1)
-  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<UserFilter>('all')
 
@@ -94,13 +95,31 @@ const Users = (): ReactElement => {
 
   const [pendingToggle, setPendingToggle] = useState<string | null>(null)
 
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createForm, setCreateForm] = useState<UserCreatePayload>({
+    username: '',
+    password: '',
+    maxSpeed: undefined,
+    premiumAccess: false,
+  })
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+
   useEffect(() => {
-    const handle = setTimeout(() => {
-      setSearch(searchInput.trim())
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    searchTimeoutRef.current = setTimeout(() => {
       setPage(1)
     }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(handle)
-  }, [searchInput])
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [search])
 
   useEffect(() => {
     let cancelled = false
@@ -120,7 +139,11 @@ const Users = (): ReactElement => {
       })
       .catch((err) => {
         if (cancelled) return
-        setError(err instanceof ApiError ? err.message : t('users.loadError'))
+        if (err instanceof AuthError) {
+          setError(t('users.authError'))
+        } else {
+          setError(err instanceof ApiError ? err.message : t('users.loadError'))
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -154,7 +177,7 @@ const Users = (): ReactElement => {
   const handleSearchChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ): void => {
-    setSearchInput(event.target.value)
+    setSearch(event.target.value)
   }
 
   const handleTabChange = (nextTab: UserFilter): void => {
@@ -220,6 +243,34 @@ const Users = (): ReactElement => {
     }
   }
 
+  const handleCreateSubmit = async (event: React.FormEvent): Promise<void> => {
+    event.preventDefault()
+    setCreateLoading(true)
+    setCreateError(null)
+    try {
+      const result = await createUser(createForm)
+      setUsers((prev) => [result, ...prev].slice(0, PAGE_SIZE))
+      setTotal((prev) => prev + 1)
+      refreshStats()
+      setCreateModalOpen(false)
+      setCreateForm({ username: '', password: '', maxSpeed: undefined, premiumAccess: false })
+    } catch (err) {
+      if (err instanceof AuthError) {
+        setCreateError(t('users.authError'))
+      } else {
+        setCreateError(err instanceof ApiError ? err.message : t('users.createError'))
+      }
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const openCreateModal = (): void => {
+    setCreateForm({ username: '', password: '', maxSpeed: undefined, premiumAccess: false })
+    setCreateError(null)
+    setCreateModalOpen(true)
+  }
+
   const statsList = [
     { label: t('users.statsTotal'), value: stats.total },
     { label: t('users.statsBlocked'), value: stats.blocked },
@@ -234,7 +285,16 @@ const Users = (): ReactElement => {
             {t('users.title')}
           </h1>
         </div>
-        <div className="flex items-center gap-3"></div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            {t('users.createUser')}
+          </button>
+        </div>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -269,7 +329,7 @@ const Users = (): ReactElement => {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                value={searchInput}
+                value={search}
                 onChange={handleSearchChange}
                 placeholder={t('users.searchPlaceholder')}
                 className="w-56 rounded-lg border border-border bg-card py-2 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -455,6 +515,99 @@ const Users = (): ReactElement => {
           onPageChange={setPage}
         />
       </div>
+
+      <Modal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        title={t('users.createUser')}
+      >
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="create-username" className="block text-sm font-medium text-foreground">
+              {t('users.username')}
+            </label>
+            <input
+              id="create-username"
+              type="text"
+              value={createForm.username}
+              onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+              placeholder={t('users.usernamePlaceholder')}
+              required
+              autoFocus
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="create-password" className="block text-sm font-medium text-foreground">
+              {t('users.password')}
+            </label>
+            <input
+              id="create-password"
+              type="password"
+              value={createForm.password}
+              onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+              placeholder={t('users.passwordPlaceholder')}
+              required
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="create-max-speed" className="block text-sm font-medium text-foreground">
+              {t('users.maxSpeed')}
+            </label>
+            <input
+              id="create-max-speed"
+              type="number"
+              min={MIN_SPEED}
+              max={MAX_SPEED}
+              value={createForm.maxSpeed ?? ''}
+              onChange={(e) => setCreateForm({ ...createForm, maxSpeed: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder={t('users.maxSpeedPlaceholder')}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="create-premium"
+              type="checkbox"
+              checked={createForm.premiumAccess}
+              onChange={(e) => setCreateForm({ ...createForm, premiumAccess: e.target.checked })}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <label htmlFor="create-premium" className="text-sm text-foreground">
+              {t('users.premiumAccess')}
+            </label>
+          </div>
+          {createError && (
+            <p className="text-sm text-destructive" role="alert">
+              {createError}
+            </p>
+          )}
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(false)}
+              className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={createLoading}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {createLoading ? (
+                <>
+                  <Spinner className="h-4 w-4 mr-2 animate-spin" />
+                  {t('common.creating')}
+                </>
+              ) : (
+                t('common.create')
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

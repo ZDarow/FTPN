@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: fptn-admin/frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: fptn-admin/frontend/package-lock.json
 
       - run: npm ci
       - run: npm run lint
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: fptn-admin/backend
     env:
       POETRY_VIRTUALENVS_CREATE: false
       POETRY_NO_INTERACTION: 1
@@ -43,7 +43,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - run: pip install --no-cache-dir "poetry==2.3.2"
+      - run: pip install --no-cache-dir "poetry==2.4.1"
       - run: poetry install --no-root --with dev
       - run: black --check app tests
       - run: pylint app

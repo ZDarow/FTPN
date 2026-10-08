@@ -55,3 +55,26 @@ export const updateUser = async (
     method: 'PUT',
     body: patch
   })
+
+export interface UserCreatePayload {
+  username: string
+  password: string
+  maxSpeed?: number
+  premiumAccess?: boolean
+}
+
+export interface UserCreated {
+  username: string
+  blocked: boolean
+  premiumAccess: boolean
+  maxSpeed: number
+  token: string
+}
+
+export const createUser = async (
+  payload: UserCreatePayload
+): Promise<UserCreated> =>
+  apiRequest<UserCreated>('/users', {
+    method: 'POST',
+    body: payload
+  })

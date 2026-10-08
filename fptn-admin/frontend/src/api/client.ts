@@ -32,6 +32,13 @@ export class ApiError extends Error {
   }
 }
 
+export class AuthError extends ApiError {
+  constructor(status: number, message: string) {
+    super(status, message)
+    this.name = 'AuthError'
+  }
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
@@ -67,6 +74,16 @@ export const apiRequest = async <T>(
   })
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      clearToken()
+      setMustChangePassword(false)
+      throw new AuthError(
+        response.status,
+        response.status === 401
+          ? 'Сессия истекла. Войдите снова.'
+          : 'Доступ запрещён.'
+      )
+    }
     throw new ApiError(response.status, await extractErrorMessage(response))
   }
 

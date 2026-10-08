@@ -152,9 +152,15 @@ chmod 600 "$ENV_FILE"
 # Создать users.list если нет
 touch /opt/fptn/fptn/docker-compose/fptn-server-data/users.list
 
-# Запуск
+# ---- Запуск (идемпотентно) ----
 cd /opt/fptn/fptn-admin
-docker compose up -d --build
+if docker compose ps --services --filter "status=running" 2>/dev/null | grep -q "fptn-admin-backend"; then
+  warn "Админ-панель уже запущена. Пересобираю..."
+  docker compose up -d --build
+else
+  docker compose up -d --build
+fi
+say "  Админ-панель запущена"
 
 # Пароль не печатается в терминал: выводить его в лог установки нельзя.
 # Кладём рядом с .env отдельным файлом с правами root-only.

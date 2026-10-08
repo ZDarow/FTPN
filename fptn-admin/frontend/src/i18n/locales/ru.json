@@ -1,6 +1,9 @@
 {
   "common": {
-    "genericError": "Что-то пошло не так. Попробуйте ещё раз."
+    "genericError": "Что-то пошло не так. Попробуйте ещё раз.",
+    "cancel": "Отмена",
+    "create": "Создать",
+    "creating": "Создание…"
   },
   "nav": {
     "dashboard": "Дашборд",
@@ -75,7 +78,17 @@
     "loadError": "Не удалось загрузить пользователей.",
     "updateSpeedError": "Не удалось изменить макс. скорость.",
     "updatePremiumError": "Не удалось изменить премиум-доступ.",
-    "updateBlockedError": "Не удалось изменить статус блокировки."
+    "updateBlockedError": "Не удалось изменить статус блокировки.",
+    "createUser": "Создать пользователя",
+    "username": "Telegram ID",
+    "usernamePlaceholder": "Введите Telegram ID",
+    "password": "Пароль",
+    "passwordPlaceholder": "Введите пароль",
+    "maxSpeed": "Макс. скорость",
+    "maxSpeedPlaceholder": "Опционально (по умолчанию 30 Мбит/с)",
+    "premiumAccess": "Премиум-доступ",
+    "createError": "Не удалось создать пользователя.",
+    "authError": "Сессия истекла. Войдите снова."
   },
   "servers": {
     "title": "Серверы",

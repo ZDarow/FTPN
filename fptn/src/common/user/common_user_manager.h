@@ -20,6 +20,7 @@ Distributed under the MIT License (https://opensource.org/licenses/MIT)
 #include <utility>
 
 #include <openssl/evp.h>  // NOLINT(build/include_order)
+#include <openssl/rand.h>  // NOLINT(build/include_order)
 
 namespace fptn::common::user {
 class CommonUserManager final {
@@ -49,8 +50,9 @@ class CommonUserManager final {
       std::cout << "User " << username << " already exists." << std::endl;
       return false;
     }
-    std::string hash = HashPassword(password);
-    users_[username] = {hash, bandwidth};
+    const std::string salt = GenerateSalt();
+    std::string hash = HashPassword(password, salt);
+    users_[username] = {hash, bandwidth, false, salt};
     SaveUsers();
     std::cout << "User " << username << " added with bandwidth " << bandwidth
               << " MB." << std::endl;
@@ -73,7 +75,7 @@ class CommonUserManager final {
 
     for (const auto& user_entry : users_) {
       const auto& username = user_entry.first;
-      const auto& [hash_password, max_speed] = user_entry.second;
+      const auto& [hash_password, max_speed, is_premium, salt] = user_entry.second;
       std::cout << username << " " << std::string(hash_password.length(), 'X')
                 << " " << max_speed << " MB" << std::endl;
     }
@@ -86,8 +88,15 @@ class CommonUserManager final {
 
     auto it = users_.find(username);
     if (it != users_.end()) {
-      std::string hash = HashPassword(password);
-      return it->second.first == hash;
+      const std::string& stored_hash = it->second.first;
+      const std::string& salt = it->second.fourth;
+      std::string hash;
+      if (!salt.empty()) {
+        hash = HashPassword(password, salt);
+      } else {
+        hash = HashPassword(password);
+      }
+      return stored_hash == hash;
     }
     return false;
   }
@@ -134,10 +143,15 @@ class CommonUserManager final {
         std::string username;
         std::string passwordHash;
         int bandwidth;
+        std::string is_premium_str;
+        std::string salt;
 
         std::istringstream iss(line);
-        if (iss >> username >> passwordHash >> bandwidth) {
-          users_[username] = {passwordHash, bandwidth};
+        if (iss >> username >> passwordHash >> bandwidth >> is_premium_str) {
+          bool is_premium = (is_premium_str == "1");
+          salt.clear();
+          iss >> salt;
+          users_[username] = {passwordHash, bandwidth, is_premium, salt};
         } else {
           std::cerr << "Skipping invalid line: " << line << std::endl;
         }
@@ -154,8 +168,9 @@ class CommonUserManager final {
       if (file.is_open()) {
         for (const auto& user_entry : users_) {
           const auto& username = user_entry.first;
-          const auto& [hash_password, max_speed] = user_entry.second;  // NOLINT
-          file << username << " " << hash_password << " " << max_speed << "\n";
+          const auto& [hash_password, max_speed, is_premium, salt] = user_entry.second;  // NOLINT
+          file << username << " " << hash_password << " " << max_speed << " "
+               << (is_premium ? "1" : "0") << " " << salt << "\n";
         }
       } else {
         std::cerr << "Unable to open file: " << tmp_path << std::endl;
@@ -169,8 +184,20 @@ class CommonUserManager final {
     }
   }
 
+  std::string GenerateSalt() const {
+    unsigned char buf[32];
+    if (RAND_bytes(buf, sizeof(buf)) != 1) {
+      return "";
+    }
+    std::ostringstream oss;
+    for (unsigned char b : buf) {
+      oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+    }
+    return oss.str();
+  }
+
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-  std::string HashPassword(const std::string& password) const {
+  std::string HashPassword(const std::string& password, const std::string& salt = "") const {
     unsigned int length = 0;
     unsigned char hash[EVP_MAX_MD_SIZE] = {0};
 
@@ -184,6 +211,14 @@ class CommonUserManager final {
       std::cerr << "Failed to initialize digest" << std::endl;
       EVP_MD_CTX_free(mdctx);
       return "";
+    }
+
+    if (!salt.empty()) {
+      if (1 != EVP_DigestUpdate(mdctx, salt.c_str(), salt.size())) {
+        std::cerr << "Failed to update digest" << std::endl;
+        EVP_MD_CTX_free(mdctx);
+        return "";
+      }
     }
 
     if (1 != EVP_DigestUpdate(mdctx, password.c_str(), password.size())) {
@@ -221,8 +256,7 @@ class CommonUserManager final {
     if (!directory_path.empty() && !std::filesystem::exists(directory_path)) {
       std::error_code ec;
       if (!std::filesystem::create_directories(directory_path, ec)) {
-        std::cerr << "Failed to create directories: " << ec.message()
-                  << std::endl;
+        std::cerr << "Failed to create directories: " << ec.message() << std::endl;
         return;
       }
     }
@@ -235,7 +269,14 @@ class CommonUserManager final {
   }
 
  private:
-  std::unordered_map<std::string, std::pair<std::string, int>> users_;
+  struct UserEntry {
+    std::string first;  // password_hash
+    int second;         // bandwidth
+    bool third;         // is_premium
+    std::string fourth; // salt
+  };
+
+  std::unordered_map<std::string, UserEntry> users_;
   mutable std::mutex mutex_;
   std::string file_path_;
   std::filesystem::file_time_type last_write_time_{};

@@ -94,6 +94,10 @@ validate_port() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 1 && $1 <= 65535 ))
 }
 
+validate_timezone() {
+  [[ "$1" =~ ^[A-Za-z]+/[A-Za-z_]+$ ]]
+}
+
 # ---- определение текущих значений ----
 if [[ -f "$ENV_FILE" ]]; then
   tui_info "FPTN Configure" "Найден существующий $ENV_FILE\n\nБэкенд UI: $(tui_backend)"
@@ -168,8 +172,14 @@ fi
 say "Torrent filter: $TORRENT_VAL"
 
 # ---- Шаг 6: Часовой пояс ----
-TZ_INPUT=$(tui_input "Шаг 6/6 — Часовой пояс" "Часовой пояс (IANA):" "${CUR_TZ:-UTC}") || true
-TZ_INPUT="${TZ_INPUT:-UTC}"
+while true; do
+  TZ_INPUT=$(tui_input "Шаг 6/6 — Часовой пояс" "Часовой пояс (IANA):" "${CUR_TZ:-UTC}") || true
+  TZ_INPUT="${TZ_INPUT:-UTC}"
+  if validate_timezone "$TZ_INPUT"; then
+    break
+  fi
+  tui_info "Ошибка" "Некорректный часовой пояс: $TZ_INPUT\nПример: Europe/Moscow"
+done
 say "Timezone: $TZ_INPUT"
 
 # ---- Подтверждение ----
