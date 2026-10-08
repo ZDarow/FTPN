@@ -17,17 +17,14 @@ logger = logging.getLogger("fptn_admin")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     # httpx logs the full request URL at INFO — for Telegram's API that URL embeds the bot token.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     get_jwt_secret()  # load or generate the persisted JWT secret
     admin_store.ensure_seed(
         settings.admin_login,
         settings.admin_password,
-        force_change=bool(settings.admin_password)
-        and settings.admin_password == "admin",
+        force_change=bool(settings.admin_password) and settings.admin_password == "admin",
     )
     if bot_settings_store.get().bot_enabled:
         bot_runner.start()

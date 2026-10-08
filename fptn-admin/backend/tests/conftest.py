@@ -32,9 +32,7 @@ def client():
 
 @pytest.fixture
 def auth(client):
-    resp = client.post(
-        "/api/v1/auth/login", json={"username": "admin", "password": "adminpass"}
-    )
+    resp = client.post("/api/v1/auth/login", json={"username": "admin", "password": "adminpass"})
     assert resp.status_code == 200
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 

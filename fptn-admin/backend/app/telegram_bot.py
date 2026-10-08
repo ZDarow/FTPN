@@ -70,11 +70,7 @@ async def _reply(update: Update, text: str, **kwargs) -> None:
 
 async def _start(update: Update, _: CallbackContext) -> None:
     data = bot_settings_store.get()
-    welcome = (
-        data.welcome_message_en
-        if _language(update) == "en"
-        else data.welcome_message_ru
-    )
+    welcome = data.welcome_message_en if _language(update) == "en" else data.welcome_message_ru
     await _reply(
         update,
         welcome,
@@ -152,13 +148,9 @@ class BotRunner:
                 return
             token = bot_settings_store.get().telegram_token
             if not token:
-                logger.warning(
-                    "Bot enabled but no telegram token is set; not starting."
-                )
+                logger.warning("Bot enabled but no telegram token is set; not starting.")
                 return
-            self._thread = threading.Thread(
-                target=self._run, args=(token,), daemon=True
-            )
+            self._thread = threading.Thread(target=self._run, args=(token,), daemon=True)
             self._thread.start()
 
     def stop(self) -> None:
@@ -184,9 +176,7 @@ class BotRunner:
         application = Application.builder().token(token).post_init(_post_init).build()
         application.add_handler(CommandHandler("start", _start))
         application.add_handler(CommandHandler("token", _get_access_token))
-        application.add_handler(
-            MessageHandler(filters.TEXT & filters.Regex("Get access file"), _start)
-        )
+        application.add_handler(MessageHandler(filters.TEXT & filters.Regex("Get access file"), _start))
         self._application = application
         logger.info("Telegram bot started polling.")
         try:

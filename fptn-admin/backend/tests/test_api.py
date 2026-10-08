@@ -1,7 +1,5 @@
 def test_login_bad_credentials(client):
-    resp = client.post(
-        "/api/v1/auth/login", json={"username": "admin", "password": "wrong"}
-    )
+    resp = client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong"})
     assert resp.status_code == 401
 
 
@@ -30,9 +28,7 @@ def test_create_get_and_404(client, auth):
     assert got.status_code == 200 and got.json()["maxSpeed"] == 250
 
     missing = client.get("/api/v1/users/000", headers=auth)
-    assert missing.status_code == 404 and missing.json() == {
-        "message": "User not found"
-    }
+    assert missing.status_code == 404 and missing.json() == {"message": "User not found"}
 
 
 def test_create_defaults_and_duplicate(client, auth):
@@ -67,9 +63,7 @@ def test_block_then_unblock(client, auth):
         "maxSpeed": 0,
     }
 
-    unblocked = client.put(
-        "/api/v1/users/100", headers=auth, json={"blocked": False, "maxSpeed": 200}
-    )
+    unblocked = client.put("/api/v1/users/100", headers=auth, json={"blocked": False, "maxSpeed": 200})
     assert unblocked.json()["blocked"] is False
     assert unblocked.json()["maxSpeed"] == 200
 
@@ -105,9 +99,7 @@ def test_list_filter_search_total(client, auth):
 
 
 def test_register_service_user_requires_auth(client):
-    resp = client.post(
-        "/api/v1/auth/register", json={"username": "op1", "password": "secret"}
-    )
+    resp = client.post("/api/v1/auth/register", json={"username": "op1", "password": "secret"})
     assert resp.status_code == 401
 
 
@@ -119,9 +111,7 @@ def test_register_service_user_and_login(client, auth):
     )
     assert created.status_code == 201 and created.json() == {"username": "op2"}
 
-    logged_in = client.post(
-        "/api/v1/auth/login", json={"username": "op2", "password": "secret"}
-    )
+    logged_in = client.post("/api/v1/auth/login", json={"username": "op2", "password": "secret"})
     assert logged_in.status_code == 200 and "access_token" in logged_in.json()
 
     dup = client.post(
@@ -138,9 +128,7 @@ def test_change_password_flow(client, auth):
         headers=auth,
         json={"username": "chp", "password": "origpass"},
     )
-    token = client.post(
-        "/api/v1/auth/login", json={"username": "chp", "password": "origpass"}
-    ).json()["access_token"]
+    token = client.post("/api/v1/auth/login", json={"username": "chp", "password": "origpass"}).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     wrong = client.post(
@@ -164,18 +152,8 @@ def test_change_password_flow(client, auth):
     )
     assert ok.status_code == 204
 
-    assert (
-        client.post(
-            "/api/v1/auth/login", json={"username": "chp", "password": "origpass"}
-        ).status_code
-        == 401
-    )
-    assert (
-        client.post(
-            "/api/v1/auth/login", json={"username": "chp", "password": "brandnew1"}
-        ).status_code
-        == 200
-    )
+    assert client.post("/api/v1/auth/login", json={"username": "chp", "password": "origpass"}).status_code == 401
+    assert client.post("/api/v1/auth/login", json={"username": "chp", "password": "brandnew1"}).status_code == 200
 
 
 def test_change_password_requires_auth(client):
@@ -187,9 +165,7 @@ def test_change_password_requires_auth(client):
 
 
 def test_dashboard_highlights(client, auth):
-    client.post(
-        "/api/v1/users", headers=auth, json={"username": "100", "password": "pw"}
-    )
+    client.post("/api/v1/users", headers=auth, json={"username": "100", "password": "pw"})
     client.post(
         "/api/v1/users",
         headers=auth,

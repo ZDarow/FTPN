@@ -49,8 +49,6 @@ class BotSettingsStore:
     def update(self, **changes) -> BotSettings:
         with self._lock:
             current = self.get()
-            updated = replace(
-                current, **{k: v for k, v in changes.items() if v is not None}
-            )
+            updated = replace(current, **{k: v for k, v in changes.items() if v is not None})
             self._write(updated)
             return updated

@@ -74,9 +74,7 @@ class VpnUserStore:
                 except ValueError:
                     continue
                 is_premium = len(parts) >= 4 and parts[3] == "1"
-                users[username] = VpnRecord(
-                    username, password_hash, speed_int, is_premium
-                )
+                users[username] = VpnRecord(username, password_hash, speed_int, is_premium)
         return users
 
     def _write_all(self, users: dict[str, VpnRecord]) -> None:
@@ -86,9 +84,7 @@ class VpnUserStore:
             with os.fdopen(fd, "w") as f:
                 for rec in users.values():
                     premium = "1" if rec.is_premium else "0"
-                    f.write(
-                        f"{rec.username} {rec.password_hash} {rec.speed} {premium}\n"
-                    )
+                    f.write(f"{rec.username} {rec.password_hash} {rec.speed} {premium}\n")
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, self.path)
@@ -147,9 +143,7 @@ class VpnUserStore:
             sum(1 for u in users if u.blocked),
         )
 
-    def create(
-        self, username: str, password: str, max_speed: int, is_premium: bool
-    ) -> VpnRecord:
+    def create(self, username: str, password: str, max_speed: int, is_premium: bool) -> VpnRecord:
         with self._locked():
             users = self._read_all()
             if username in users:

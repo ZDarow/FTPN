@@ -6,9 +6,7 @@ from app.deps import server_store
 from app.schemas import Server, ServerCreate, ServersList, ServerUpdate
 from app.security import get_current_admin
 
-router = APIRouter(
-    prefix="/servers", tags=["servers"], dependencies=[Depends(get_current_admin)]
-)
+router = APIRouter(prefix="/servers", tags=["servers"], dependencies=[Depends(get_current_admin)])
 
 
 @router.get(
@@ -51,9 +49,7 @@ def add_server(body: ServerCreate) -> Server:
     summary="Update a VPN server",
     description="Partial update of a server's fields (host, fingerprint, port, ping) or rename it.",
 )
-def update_server(
-    kind: Literal["regular", "premium", "censored"], name: str, body: ServerUpdate
-) -> Server:
+def update_server(kind: Literal["regular", "premium", "censored"], name: str, body: ServerUpdate) -> Server:
     server = server_store.update(
         kind,
         name,
@@ -72,8 +68,6 @@ def update_server(
     summary="Delete a VPN server",
     description="Remove a server from the given list by kind and name.",
 )
-def delete_server(
-    kind: Literal["regular", "premium", "censored"], name: str
-) -> Response:
+def delete_server(kind: Literal["regular", "premium", "censored"], name: str) -> Response:
     server_store.delete(kind, name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

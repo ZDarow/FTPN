@@ -40,6 +40,4 @@ def build_access_link(token: str, brotli_enabled: bool) -> str:
             mode=brotli.MODE_TEXT,
         )
         return "fptnb:" + base64.b64encode(compressed).decode("utf-8").replace("=", "")
-    return "fptn:" + base64.b64encode(token.encode("utf-8")).decode("utf-8").replace(
-        "=", ""
-    )
+    return "fptn:" + base64.b64encode(token.encode("utf-8")).decode("utf-8").replace("=", "")

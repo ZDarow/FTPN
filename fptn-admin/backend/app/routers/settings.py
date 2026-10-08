@@ -6,9 +6,7 @@ from app.security import get_current_admin
 from app.stores.bot_settings_store import BotSettings
 from app.telegram_bot import bot_runner
 
-router = APIRouter(
-    prefix="/settings", tags=["settings"], dependencies=[Depends(get_current_admin)]
-)
+router = APIRouter(prefix="/settings", tags=["settings"], dependencies=[Depends(get_current_admin)])
 
 
 def _mask_token(token: str) -> str:

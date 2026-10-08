@@ -63,9 +63,7 @@ def test_reply_sends_markdown_when_it_parses():
 
 def test_reply_falls_back_to_plain_text_on_bad_markdown():
     update = _make_update()
-    update.message.reply_text = AsyncMock(
-        side_effect=[BadRequest("Can't parse entities"), None]
-    )
+    update.message.reply_text = AsyncMock(side_effect=[BadRequest("Can't parse entities"), None])
 
     asyncio.run(_reply(update, "broken _markdown", disable_web_page_preview=True))
 
@@ -79,9 +77,7 @@ def test_reply_falls_back_to_plain_text_on_bad_markdown():
 
 
 def test_start_sends_the_welcome_message_for_the_user_language():
-    bot_settings_store.update(
-        welcome_message_en="Hi EN", welcome_message_ru="Привет RU"
-    )
+    bot_settings_store.update(welcome_message_en="Hi EN", welcome_message_ru="Привет RU")
 
     update = _make_update(language_code="ru")
     asyncio.run(_start(update, None))
@@ -91,9 +87,7 @@ def test_start_sends_the_welcome_message_for_the_user_language():
 
 
 def test_start_falls_back_to_english_for_an_unsupported_language():
-    bot_settings_store.update(
-        welcome_message_en="Hi EN", welcome_message_ru="Привет RU"
-    )
+    bot_settings_store.update(welcome_message_en="Hi EN", welcome_message_ru="Привет RU")
 
     update = _make_update(language_code="de")
     asyncio.run(_start(update, None))
@@ -188,9 +182,7 @@ def test_bot_runner_sets_an_event_loop_for_its_thread(monkeypatch):
         def build(self):
             return FakeApplication()
 
-    monkeypatch.setattr(
-        telegram_bot_module.Application, "builder", staticmethod(FakeBuilder)
-    )
+    monkeypatch.setattr(telegram_bot_module.Application, "builder", staticmethod(FakeBuilder))
     bot_settings_store.update(telegram_token="fake-token")
 
     bot_runner.start()
@@ -225,9 +217,7 @@ def test_bot_runner_stop_works_when_called_from_a_different_thread(monkeypatch):
         def build(self):
             return FakeApplication()
 
-    monkeypatch.setattr(
-        telegram_bot_module.Application, "builder", staticmethod(FakeBuilder)
-    )
+    monkeypatch.setattr(telegram_bot_module.Application, "builder", staticmethod(FakeBuilder))
     bot_settings_store.update(telegram_token="fake-token")
 
     bot_runner.start()

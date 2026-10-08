@@ -34,9 +34,7 @@ def _check_rate_limit(identifier: str) -> None:
 def login(body: AdminLogin) -> TokenResponse:
     _check_rate_limit(body.username)
     if not admin_store.authenticate(body.username, body.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return TokenResponse(
         access_token=create_access_token(body.username),
         mustChangePassword=admin_store.must_change_password(body.username),
@@ -49,9 +47,7 @@ def login(body: AdminLogin) -> TokenResponse:
     summary="Change admin password",
     description="Change the current admin's own password. Requires the current password; new one must be 8+ chars.",
 )
-def change_password(
-    body: ChangePassword, admin: str = Depends(get_current_admin)
-) -> Response:
+def change_password(body: ChangePassword, admin: str = Depends(get_current_admin)) -> Response:
     if body.newPassword == body.currentPassword:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

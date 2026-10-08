@@ -18,9 +18,7 @@ def create_access_token(subject: str) -> str:
 
 
 def get_current_admin(
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(_bearer)
-    ] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
 ) -> str:
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

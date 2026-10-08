@@ -57,9 +57,7 @@ class AdminStore:
         if not entry:
             return False
         try:
-            return bcrypt.checkpw(
-                password.encode("utf-8"), entry["password_hash"].encode("utf-8")
-            )
+            return bcrypt.checkpw(password.encode("utf-8"), entry["password_hash"].encode("utf-8"))
         except (ValueError, KeyError):
             return False
 
@@ -82,18 +80,14 @@ class AdminStore:
         with self._locked():
             data = self._load()
             entry = data.get(login)
-            if not entry or not bcrypt.checkpw(
-                current.encode("utf-8"), entry["password_hash"].encode("utf-8")
-            ):
+            if not entry or not bcrypt.checkpw(current.encode("utf-8"), entry["password_hash"].encode("utf-8")):
                 return False
             entry["password_hash"] = self._hash(new)
             entry["must_change_password"] = False
             self._save(data)
             return True
 
-    def ensure_seed(
-        self, login: str | None, password: str | None, force_change: bool = False
-    ) -> None:
+    def ensure_seed(self, login: str | None, password: str | None, force_change: bool = False) -> None:
         """Seed the first admin when the store is empty (Grafana-style bootstrap)."""
         if self._load():
             return
