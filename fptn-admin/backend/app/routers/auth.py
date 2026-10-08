@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+import time
 
 from app.deps import admin_store
 from app.schemas import AdminCreate, AdminLogin, AdminOut, ChangePassword, TokenResponse
@@ -12,8 +13,6 @@ _WINDOW_SECONDS = 60
 
 
 def _check_rate_limit(identifier: str) -> None:
-    import time
-
     now = time.time()
     attempts = _login_attempts.get(identifier, [])
     _login_attempts[identifier] = [t for t in attempts if now - t < _WINDOW_SECONDS]

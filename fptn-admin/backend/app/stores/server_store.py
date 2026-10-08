@@ -120,7 +120,7 @@ class ServerStore:
             if server is None:
                 raise ServerNotFound(name)
 
-            update_data = {k: v for k, v in server.items()}
+            update_data = dict(server.items())
             if new_name and new_name != name:
                 if any(s.get("name") == new_name for s in servers):
                     raise ServerExists(new_name)
