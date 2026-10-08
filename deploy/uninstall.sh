@@ -13,7 +13,9 @@ read -rp "Удалить ВСЁ (VPN + админка + бот + /opt/fptn + с�
 [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Отменено"; exit 0; }
 
 # Остановить и удалить контейнеры
-for d in /opt/fptn/fptn/docker-compose /opt/fptn/fptn-admin /opt/fptn/fptn/sysadmin-tools/telegram-bot; do
+# (legacy-бот fptn/sysadmin-tools/telegram-bot удалён в d404aea,
+#  путь оставлен для совместимости со старыми установками)
+for d in /opt/fptn/fptn/docker-compose /opt/fptn/fptn-admin /opt/fptn/fptn-admin-bot /opt/fptn/fptn/sysadmin-tools/telegram-bot; do
   if [[ -d "$d" ]]; then
     ( cd "$d" && docker compose down ) 2>/dev/null || true
   fi
