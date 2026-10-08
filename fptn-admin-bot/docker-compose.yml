@@ -6,6 +6,8 @@ services:
     environment:
       - TELEGRAM_API_TOKEN=${TELEGRAM_API_TOKEN}
       - ADMIN_IDS=${ADMIN_IDS}
+      - FPTN_WELCOME_MESSAGE_EN=${FPTN_WELCOME_MESSAGE_EN:-}
+      - FPTN_WELCOME_MESSAGE_RU=${FPTN_WELCOME_MESSAGE_RU:-}
       - USERS_FILE=${USERS_FILE:-/etc/fptn/users.list}
       - SERVERS_LIST_FILE=${SERVERS_LIST_FILE:-/etc/fptn/servers.json}
       - PREMIUM_SERVERS_FILE=${PREMIUM_SERVERS_FILE:-/etc/fptn/premium_servers.json}
