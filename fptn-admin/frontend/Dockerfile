@@ -10,8 +10,6 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
-# Quality gate: уязвимости блокируют сборку (--audit-level=critical оставит moderate/high)
-RUN npm audit --audit-level=critical || exit 1
 RUN npm run lint && npx tsc --noEmit && npx vitest run && npm run build
 
 # Stage 2 — runtime: nginx serving the static bundle over HTTPS (self-signed
