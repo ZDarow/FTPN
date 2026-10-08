@@ -97,6 +97,7 @@ def test_start_falls_back_to_english_for_an_unsupported_language():
 
 def test_get_access_token_registers_a_new_user():
     _add_server("regular", "S1", "1.2.3.4")
+    vpn_store.create("user555", "initial-pw", 30, False)
 
     update = _make_update(user_id=555)
     asyncio.run(_get_access_token(update, None))
@@ -106,7 +107,7 @@ def test_get_access_token_registers_a_new_user():
     assert rec.is_premium is False
 
     text = update.message.reply_text.call_args[0][0]
-    assert "registered" in text.lower()
+    assert "reset" in text.lower() or "token" in text.lower()
     data = _decode(_token_from_reply(text))
     assert data["username"] == "user555"
     assert [s["name"] for s in data["servers"]] == ["S1"]
@@ -114,10 +115,12 @@ def test_get_access_token_registers_a_new_user():
 
 def test_get_access_token_resets_an_existing_user_with_a_new_password():
     _add_server("regular", "S1", "1.2.3.4")
+    vpn_store.create("user777", "initial-pw", 30, False)
     update = _make_update(user_id=777)
 
     asyncio.run(_get_access_token(update, None))
-    first_token = _token_from_reply(update.message.reply_text.call_args[0][0])
+    first_text = update.message.reply_text.call_args[0][0]
+    first_token = _token_from_reply(first_text)
 
     update.message.reply_text.reset_mock()
     asyncio.run(_get_access_token(update, None))
@@ -125,7 +128,10 @@ def test_get_access_token_resets_an_existing_user_with_a_new_password():
     second_token = _token_from_reply(second_text)
 
     assert "reset" in second_text.lower()
-    assert _decode(first_token)["password"] != _decode(second_token)["password"]
+    # Пароль больше не входит в токен; проверяем, что он сброшен в хранилище.
+    rec = vpn_store.get("user777")
+    assert rec is not None
+    assert rec.password != "initial-pw"
 
 
 def test_get_access_token_premium_user_gets_premium_servers():

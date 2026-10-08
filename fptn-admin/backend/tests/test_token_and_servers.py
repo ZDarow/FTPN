@@ -78,7 +78,7 @@ def test_create_user_returns_token_with_servers(client, auth):
     resp = client.post("/api/v1/users", headers=auth, json={"username": "100", "password": "pw"})
     assert resp.status_code == 201
     data = _decode(resp.json()["token"])
-    assert data["username"] == "100" and data["password"] == "pw"
+    assert data["username"] == "100"
     assert data["service_name"] == "fptn-test" and data["version"] == 1
     assert [s["name"] for s in data["servers"]] == ["S1"]
 
@@ -115,7 +115,12 @@ def test_issue_token_resets_password(client, auth):
     resp = client.post("/api/v1/users/100/token", headers=auth)
     assert resp.status_code == 200
     data = _decode(resp.json()["token"])
-    assert data["username"] == "100" and data["password"] != "pw"
+    assert data["username"] == "100"
+    # Пароль больше не входит в токен; проверяем, что он сброшен в хранилище.
+    from app.deps import vpn_store
+    rec = vpn_store.get("100")
+    assert rec is not None
+    assert rec.password != "pw"
 
 
 def test_issue_token_missing_user(client, auth):
